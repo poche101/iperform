@@ -2,7 +2,7 @@
 @section('title', 'Users')
 
 @section('nav')
-@foreach([['hr.dashboard','ti-chart-bar','HR Overview'],['hr.users','ti-users','Users'],['hr.assignments','ti-arrows-exchange','Assignments'],['hr.cycles','ti-calendar','Cycles'],['hr.tasks','ti-clipboard-list','Task Logs']] as [$route,$icon,$label])
+@foreach([['hr.dashboard','ti-chart-bar','Staff Performance Overview'],['hr.users','ti-users','Users'],['hr.assignments','ti-arrows-exchange','Assignments'],['hr.cycles','ti-calendar','Cycles'],['hr.tasks','ti-clipboard-list','Task Logs']] as [$route,$icon,$label])
 <a href="{{ route($route) }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs($route) ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
   <i class="ti {{ $icon }} text-lg w-5"></i> {{ $label }}
 </a>
@@ -13,7 +13,7 @@
 <div class="flex items-start justify-between mb-5">
   <div>
     <div class="text-2xl font-bold text-gray-900">Users</div>
-    <div class="text-sm text-gray-500">Create logins for staff, supervisors and HR.</div>
+    <div class="text-sm text-gray-500">Create logins for staff, supervisors and Staff Performance.</div>
   </div>
   <button onclick="document.getElementById('add-user-modal').classList.remove('hidden')" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#26215C] transition">
     <i class="ti ti-plus"></i> Add user
@@ -46,8 +46,8 @@
         <td class="py-3 px-4 text-[#534AB7]">{{ $u->username }}</td>
         <td class="py-3 px-4">
           <span class="text-[11px] font-medium px-2 py-0.5 rounded-full
-            {{ $u->role==='hr' ? 'bg-orange-100 text-orange-700' : ($u->role==='supervisor' ? 'bg-[#eeedfe] text-[#3C3489]' : 'bg-gray-100 text-gray-500') }}">
-            {{ strtoupper($u->role) }}
+            {{ $u->role==='staff_performance' ? 'bg-orange-100 text-orange-700' : ($u->role==='supervisor' ? 'bg-[#eeedfe] text-[#3C3489]' : 'bg-gray-100 text-gray-500') }}">
+            {{ strtoupper(str_replace('_', ' ', $u->role)) }}
           </span>
         </td>
         <td class="py-3 px-4 text-gray-500">{{ $u->department ?? '—' }}</td>
@@ -70,7 +70,7 @@
 <div id="add-user-modal" class="hidden fixed inset-0 bg-[#3C3489]/40 flex items-center justify-center z-50 p-4">
   <div class="bg-white rounded-2xl p-6 w-full max-w-md">
     <div class="text-lg font-semibold mb-1">Add user</div>
-    <div class="text-sm text-gray-400 mb-5">Create a sign-in for a new staff, supervisor or HR member.</div>
+    <div class="text-sm text-gray-400 mb-5">Create a sign-in for a new staff, supervisor or Staff Performance member.</div>
     <form method="POST" action="{{ route('hr.users.store') }}" class="space-y-4">
       @csrf
       <div>
@@ -101,7 +101,7 @@
           <select name="role" id="role-select" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
             <option value="staff">Staff</option>
             <option value="supervisor">Supervisor</option>
-            <option value="hr">HR</option>
+            <option value="staff_performance">Staff Performance</option>
           </select>
         </div>
         <div id="sup-field">

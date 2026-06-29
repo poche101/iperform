@@ -388,7 +388,7 @@
     <i class="ti ti-device-floppy"></i> Save grades
   </button>
   <button type="submit" formaction="{{ route('supervisor.appraisal.forward', $appraisal) }}" onclick="return confirm('Forward this appraisal to HR? You cannot edit it after forwarding.')" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#26215C] transition">
-    <i class="ti ti-arrow-right"></i> Forward to HR
+    <i class="ti ti-arrow-right"></i> Forward to Staff Performance
   </button>
 </div>
 @endif

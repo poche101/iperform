@@ -24,9 +24,9 @@ class AuthController extends Controller
             $request->session()->regenerate();
             $user = Auth::user();
             return match($user->role) {
-                'hr' => redirect()->route('hr.dashboard'),
-                'supervisor' => redirect()->route('supervisor.dashboard'),
-                default => redirect()->route('staff.dashboard'),
+                'staff_performance' => redirect()->route('staff_performance.dashboard'),
+                'supervisor'        => redirect()->route('supervisor.dashboard'),
+                default             => redirect()->route('staff.dashboard'),
             };
         }
 

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Appraisal;
@@ -161,63 +162,63 @@ class AppraisalController extends Controller
         return back()->with('success', 'Grades saved.');
     }
 
-    /** Supervisor: forward to HR */
+    /** Supervisor: forward to Staff Performance */
     public function supervisorForward(Request $request, Appraisal $appraisal)
     {
         $this->authorizeSupervisor($appraisal);
         $this->supervisorSave($request, $appraisal);
-        $appraisal->update(['status'=>'with_hr','supervisor_confirmed'=>true,'forwarded_at'=>now()]);
-        return redirect()->route('supervisor.dashboard')->with('success', 'Appraisal forwarded to HR!');
+        $appraisal->update(['status'=>'with_staff_performance','supervisor_confirmed'=>true,'forwarded_at'=>now()]);
+        return redirect()->route('supervisor.dashboard')->with('success', 'Appraisal forwarded to Staff Performance!');
     }
 
-    /** HR: show appraisal */
-    public function hrShow(Appraisal $appraisal)
+    /** Staff Performance: show appraisal */
+    public function staffPerformanceShow(Appraisal $appraisal)
     {
-        abort_unless(Auth::user()->isHR(), 403);
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
         $appraisal->load(['kras','tasks','innovations','competencies','staff','supervisor','cycle']);
-        return view('appraisal.hr', compact('appraisal'));
+        return view('appraisal.staff_performance', compact('appraisal'));
     }
 
-    /** HR: auto-calculate totals */
-    public function hrAutoCalculate(Appraisal $appraisal)
+    /** Staff Performance: auto-calculate totals */
+    public function staffPerformanceAutoCalculate(Appraisal $appraisal)
     {
-        abort_unless(Auth::user()->isHR(), 403);
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
         $appraisal->load(['kras','tasks','innovations']);
         $appraisal->autoCalculate();
         return response()->json([
-            's1' => $appraisal->hr_s1_weighted,
-            's2' => $appraisal->hr_s2_weighted,
-            's3' => $appraisal->hr_s3_weighted,
-            's4' => $appraisal->hr_s4_weighted,
-            'overall' => $appraisal->hr_overall,
-            'grade' => $appraisal->hr_grade,
+            's1' => $appraisal->staff_performance_s1_weighted,
+            's2' => $appraisal->staff_performance_s2_weighted,
+            's3' => $appraisal->staff_performance_s3_weighted,
+            's4' => $appraisal->staff_performance_s4_weighted,
+            'overall' => $appraisal->staff_performance_overall,
+            'grade' => $appraisal->staff_performance_grade,
         ]);
     }
 
-    /** HR: save and approve */
-    public function hrApprove(Request $request, Appraisal $appraisal)
+    /** Staff Performance: save and approve */
+    public function staffPerformanceApprove(Request $request, Appraisal $appraisal)
     {
-        abort_unless(Auth::user()->isHR(), 403);
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
         $appraisal->update([
-            'hr_s1_weighted' => $request->input('hr_s1_weighted'),
-            'hr_s2_weighted' => $request->input('hr_s2_weighted'),
-            'hr_s3_weighted' => $request->input('hr_s3_weighted'),
-            'hr_s4_weighted' => $request->input('hr_s4_weighted'),
-            'hr_overall' => $request->input('hr_overall'),
-            'hr_grade' => $request->input('hr_grade'),
-            'hr_comments' => $request->input('hr_comments'),
+            'staff_performance_s1_weighted' => $request->input('staff_performance_s1_weighted'),
+            'staff_performance_s2_weighted' => $request->input('staff_performance_s2_weighted'),
+            'staff_performance_s3_weighted' => $request->input('staff_performance_s3_weighted'),
+            'staff_performance_s4_weighted' => $request->input('staff_performance_s4_weighted'),
+            'staff_performance_overall'     => $request->input('staff_performance_overall'),
+            'staff_performance_grade'       => $request->input('staff_performance_grade'),
+            'staff_performance_comments'    => $request->input('staff_performance_comments'),
             'status' => 'approved',
             'approved_at' => now(),
         ]);
-        return redirect()->route('hr.dashboard')->with('success', 'Appraisal approved!');
+        return redirect()->route('staff_performance.dashboard')->with('success', 'Appraisal approved!');
     }
 
-    /** AI: generate HR comment */
+    /** AI: generate Staff Performance comment */
     public function aiComment(Request $request, Appraisal $appraisal)
     {
-        abort_unless(Auth::user()->isHR(), 403);
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
         $staff = $appraisal->staff;
-        $prompt = "You are an HR performance manager at a church organisation. Write a concise, professional 2-3 sentence HR performance comment for {$staff->name} ({$staff->designation}, {$staff->department}) for the {$appraisal->cycle->name} appraisal. Overall score: {$appraisal->hr_overall}/100 (Grade: {$appraisal->hr_grade}). Key strengths: {$appraisal->key_strengths}. Areas for improvement: {$appraisal->areas_for_improvement}. Write in third person, professional and encouraging tone.";
+        $prompt = "You are a staff performance manager at a church organisation. Write a concise, professional 2-3 sentence staff performance comment for {$staff->name} ({$staff->designation}, {$staff->department}) for the {$appraisal->cycle->name} appraisal. Overall score: {$appraisal->staff_performance_overall}/100 (Grade: {$appraisal->staff_performance_grade}). Key strengths: {$appraisal->key_strengths}. Areas for improvement: {$appraisal->areas_for_improvement}. Write in third person, professional and encouraging tone.";
 
         $response = Http::withHeaders(['x-api-key' => config('services.anthropic.key'), 'anthropic-version' => '2023-06-01', 'Content-Type' => 'application/json'])
             ->post('https://api.anthropic.com/v1/messages', [
@@ -234,7 +235,7 @@ class AppraisalController extends Controller
     {
         $user = Auth::user();
         abort_unless(
-            $user->isHR() || $appraisal->supervisor_id === $user->id || $appraisal->staff_id === $user->id,
+            $user->isStaffPerformance() || $appraisal->supervisor_id === $user->id || $appraisal->staff_id === $user->id,
             403
         );
         $appraisal->load(['kras','tasks','innovations','competencies','staff','supervisor','cycle']);

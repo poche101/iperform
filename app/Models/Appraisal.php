@@ -11,8 +11,8 @@ class Appraisal extends Model
         'section5','section6','section7_items',
         'overall_contribution','key_strengths','areas_for_improvement',
         'salary_percent','supervisor_comments','supervisor_confirmed',
-        'hr_s1_weighted','hr_s2_weighted','hr_s3_weighted','hr_s4_weighted',
-        'hr_overall','hr_grade','hr_comments',
+        'staff_performance_s1_weighted','staff_performance_s2_weighted','staff_performance_s3_weighted','staff_performance_s4_weighted',
+        'staff_performance_overall','staff_performance_grade','staff_performance_comments',
         'submitted_at','forwarded_at','approved_at',
     ];
 
@@ -116,12 +116,12 @@ class Appraisal extends Model
         $grade   = $this->getGrade($overall);
 
         $this->update([
-            'hr_s1_weighted' => $s1,
-            'hr_s2_weighted' => $s2,
-            'hr_s3_weighted' => $s3,
-            'hr_s4_weighted' => $s4,
-            'hr_overall'     => $overall,
-            'hr_grade'       => $grade,
+            'staff_performance_s1_weighted' => $s1,
+            'staff_performance_s2_weighted' => $s2,
+            'staff_performance_s3_weighted' => $s3,
+            'staff_performance_s4_weighted' => $s4,
+            'staff_performance_overall'     => $overall,
+            'staff_performance_grade'       => $grade,
         ]);
 
         return $this;

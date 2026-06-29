@@ -3,7 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\SupervisorController;
-use App\Http\Controllers\HRController;
+use App\Http\Controllers\StaffPerformanceController; // Updated Controller Import
 use App\Http\Controllers\AppraisalController;
 use App\Http\Controllers\TaskLogController;
 use Illuminate\Support\Facades\Route;
@@ -45,16 +45,16 @@ Route::middleware(['auth'])->prefix('supervisor')->name('supervisor.')->group(fu
     Route::post('/appraisal/{appraisal}/forward', [AppraisalController::class, 'supervisorForward'])->name('appraisal.forward');
 });
 
-// HR
+// Staff Performance (Maintains prefix and named routes as 'hr' to match your layouts)
 Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
-    Route::get('/dashboard', [HRController::class, 'dashboard'])->name('dashboard');
-    Route::get('/users', [HRController::class, 'users'])->name('users');
-    Route::post('/users', [HRController::class, 'storeUser'])->name('users.store');
-    Route::delete('/users/{user}', [HRController::class, 'deleteUser'])->name('users.delete');
-    Route::get('/assignments', [HRController::class, 'assignments'])->name('assignments');
-    Route::post('/assignments/{user}', [HRController::class, 'updateAssignment'])->name('assignments.update');
-    Route::get('/cycles', [HRController::class, 'cycles'])->name('cycles');
-    Route::post('/cycles', [HRController::class, 'storeCycle'])->name('cycles.store');
+    Route::get('/dashboard', [StaffPerformanceController::class, 'dashboard'])->name('dashboard');
+    Route::get('/users', [StaffPerformanceController::class, 'users'])->name('users');
+    Route::post('/users', [StaffPerformanceController::class, 'storeUser'])->name('users.store');
+    Route::delete('/users/{user}', [StaffPerformanceController::class, 'deleteUser'])->name('users.delete');
+    Route::get('/assignments', [StaffPerformanceController::class, 'assignments'])->name('assignments');
+    Route::post('/assignments/{user}', [StaffPerformanceController::class, 'updateAssignment'])->name('assignments.update');
+    Route::get('/cycles', [StaffPerformanceController::class, 'cycles'])->name('cycles');
+    Route::post('/cycles', [StaffPerformanceController::class, 'storeCycle'])->name('cycles.store');
     Route::get('/tasks', [TaskLogController::class, 'hrIndex'])->name('tasks');
     Route::get('/appraisal/{appraisal}', [AppraisalController::class, 'hrShow'])->name('appraisal.show');
     Route::post('/appraisal/{appraisal}/auto-calculate', [AppraisalController::class, 'hrAutoCalculate'])->name('appraisal.calculate');

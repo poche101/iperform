@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
-class HRController extends Controller
+class StaffPerformanceController extends Controller
 {
     public function dashboard()
     {
@@ -21,18 +21,18 @@ class HRController extends Controller
             : collect();
 
         $stats = [
-            'total'     => $allStaff->count(),
-            'approved'  => $appraisals->where('status', 'approved')->count(),
-            'with_hr'   => $appraisals->where('status', 'with_hr')->count(),
-            'submitted' => $appraisals->where('status', 'submitted')->count(),
-            'drafting'  => $allStaff->count()
-                            - $appraisals->where('status', 'approved')->count()
-                            - $appraisals->where('status', 'with_hr')->count()
-                            - $appraisals->where('status', 'submitted')->count(),
-            'avg_score' => $appraisals->whereNotNull('hr_overall')->avg('hr_overall'),
+            'total'                  => $allStaff->count(),
+            'approved'               => $appraisals->where('status', 'approved')->count(),
+            'with_staff performance' => $appraisals->where('status', 'staff_performance')->count(),
+            'submitted'              => $appraisals->where('status', 'submitted')->count(),
+            'drafting'               => $allStaff->count()
+                                        - $appraisals->where('status', 'approved')->count()
+                                        - $appraisals->where('status', 'with_staff_performance')->count()
+                                        - $appraisals->where('status', 'submitted')->count(),
+            'avg_score'              => $appraisals->whereNotNull('staff_performance_overall')->avg('staff_performance_overall'),
         ];
 
-        return view('hr.dashboard', compact('cycle', 'allStaff', 'appraisals', 'stats'));
+        return view('staff_performance.dashboard', compact('cycle', 'allStaff', 'appraisals', 'stats'));
     }
 
     public function users()
@@ -40,7 +40,7 @@ class HRController extends Controller
         $users       = User::with('supervisor')->orderBy('role')->get();
         $supervisors = User::where('role', 'supervisor')->get();
 
-        return view('hr.users', compact('users', 'supervisors'));
+        return view('staff_performance.users', compact('users', 'supervisors'));
     }
 
     public function storeUser(Request $request)
@@ -49,7 +49,7 @@ class HRController extends Controller
             'name'          => 'required|string|max:255',
             'username'      => 'required|string|unique:users',
             'password'      => 'required|string|min:6',
-            'role'          => 'required|in:staff,supervisor,hr',
+            'role'          => 'required|in:staff,supervisor,staff_performance',
             'department'    => 'nullable|string',
             'designation'   => 'nullable|string',
             'supervisor_id' => 'nullable|exists:users,id',
@@ -81,7 +81,7 @@ class HRController extends Controller
         $allStaff    = User::where('role', 'staff')->with('supervisor')->get();
         $supervisors = User::where('role', 'supervisor')->get();
 
-        return view('hr.assignments', compact('allStaff', 'supervisors'));
+        return view('staff_performance.assignments', compact('allStaff', 'supervisors'));
     }
 
     public function updateAssignment(Request $request, User $user)
@@ -96,7 +96,7 @@ class HRController extends Controller
     {
         $cycles = AppraisalCycle::orderByDesc('created_at')->get();
 
-        return view('hr.cycles', compact('cycles'));
+        return view('staff_performance.cycles', compact('cycles'));
     }
 
     public function storeCycle(Request $request)

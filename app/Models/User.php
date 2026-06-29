@@ -15,7 +15,7 @@ class User extends Authenticatable
     public function supervisor() { return $this->belongsTo(User::class, 'supervisor_id'); }
     public function subordinates() { return $this->hasMany(User::class, 'supervisor_id'); }
     public function appraisals() { return $this->hasMany(Appraisal::class, 'staff_id'); }
-    public function isHR() { return $this->role === 'hr'; }
+    public function isStaffPerformance() { return $this->role === 'staff_performance'; }
     public function isSupervisor() { return $this->role === 'supervisor'; }
     public function isStaff() { return $this->role === 'staff'; }
 

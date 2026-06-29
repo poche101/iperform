@@ -13,7 +13,7 @@ return new class extends Migration {
             $table->string('username')->unique();
             $table->string('email')->unique()->nullable();
             $table->string('password');
-            $table->enum('role', ['staff', 'supervisor', 'hr']);
+            $table->enum('role', ['staff', 'supervisor', 'staff_performance']);
             $table->string('department')->nullable();
             $table->string('designation')->nullable();
             $table->string('title')->nullable(); // e.g. Lead Supervisor
