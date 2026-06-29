@@ -15,7 +15,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Sis. Olachi Chukwutame',
             'username' => 'staff_performance',
             'email' => 'hr@iperform.app',
-            'password' => Hash::make('Pastordeola2026'),
+            'password' => Hash::make('Performance2026'),
             'role' => 'staff_performance',
         ]);
     }

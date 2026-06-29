@@ -21,16 +21,16 @@ class StaffPerformanceController extends Controller
             : collect();
 
         $stats = [
-            'total'                  => $allStaff->count(),
-            'approved'               => $appraisals->where('status', 'approved')->count(),
-            'with_staff performance' => $appraisals->where('status', 'staff_performance')->count(),
-            'submitted'              => $appraisals->where('status', 'submitted')->count(),
-            'drafting'               => $allStaff->count()
-                                        - $appraisals->where('status', 'approved')->count()
-                                        - $appraisals->where('status', 'with_staff_performance')->count()
-                                        - $appraisals->where('status', 'submitted')->count(),
-            'avg_score'              => $appraisals->whereNotNull('staff_performance_overall')->avg('staff_performance_overall'),
-        ];
+    'total'                  => $allStaff->count(),
+    'approved'               => $appraisals->where('status', 'approved')->count(),
+    'with_staff_performance' => $appraisals->where('status', 'staff_performance')->count(), // 👈 Fixed space to underscore
+    'submitted'              => $appraisals->where('status', 'submitted')->count(),
+    'drafting'               => $allStaff->count()
+                                - $appraisals->where('status', 'approved')->count()
+                                - $appraisals->where('status', 'staff_performance')->count() // 👈 Also fixed status name here to match 'staff_performance'
+                                - $appraisals->where('status', 'submitted')->count(),
+    'avg_score'              => $appraisals->whereNotNull('staff_performance_overall')->avg('staff_performance_overall'),
+];
 
         return view('staff_performance.dashboard', compact('cycle', 'allStaff', 'appraisals', 'stats'));
     }

@@ -14,7 +14,7 @@
 <div class="text-sm text-gray-500 mb-5">Org-wide insights for the {{ $cycle?->name ?? '—' }} cycle.</div>
 
 <div class="grid grid-cols-4 gap-3 mb-5">
-  @foreach([['ti-users','Total staff',$stats['total']],['ti-trending-up','Avg. score',round($stats['avg_score'] ?? 0).'%'],['ti-award','Approved',$stats['approved']],['ti-alert-triangle','With Staff Performance',$stats['with_staff_performance']]] as [$icon,$label,$val])
+ @foreach([['ti-users','Total staff',$stats['total'] ?? 0],['ti-trending-up','Avg. score',round($stats['avg_score'] ?? 0).'%'],['ti-award','Approved',$stats['approved'] ?? 0],['ti-alert-triangle','With Staff Performance',$stats['with_staff_performance'] ?? 0]] as [$icon,$label,$val])
   <div class="bg-white border border-[#e0daf5] rounded-xl p-4">
     <div class="w-9 h-9 bg-[#eeedfe] rounded-lg flex items-center justify-center mb-2"><i class="ti {{ $icon }} text-[#3C3489] text-lg"></i></div>
     <div class="text-2xl font-bold text-gray-900">{{ $val }}</div>
