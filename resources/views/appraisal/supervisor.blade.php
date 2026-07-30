@@ -10,7 +10,10 @@
 @endsection
 
 @section('content')
-@php $canEdit = $appraisal->status === 'submitted' && auth()->id() === $appraisal->supervisor_id; @endphp
+@php
+  $canEdit = $appraisal->status === 'submitted' && auth()->id() === $appraisal->supervisor_id;
+  $canEditTraining = auth()->id() === $appraisal->supervisor_id; // Sections 6, 7 & Work Confirmation always editable for the assigned supervisor
+@endphp
 
 <div class="flex items-start justify-between mb-5">
   <div>
@@ -35,7 +38,7 @@
 </div>
 @endif
 
-<form method="POST" action="{{ $canEdit ? route('supervisor.appraisal.save', $appraisal) : '#' }}" id="sup-form">
+<form method="POST" action="{{ ($canEdit || $canEditTraining) ? route('supervisor.appraisal.save', $appraisal) : '#' }}" id="sup-form">
 @csrf
 
 {{-- Vital info --}}
@@ -262,8 +265,8 @@
     <table class="w-full text-sm">
       <thead><tr class="bg-[#f5f0ff]"><th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium w-8">#</th><th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Challenge</th><th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Impact</th></tr></thead>
       <tbody>
-        @forelse((is_array($appraisal->section5) ? $appraisal->section5 : (json_decode($appraisal->getRawOriginal('section5'), true) ?? [])) as $row)
-        <tr class="border-t border-[#f0edf8]"><td class="py-2 px-3 text-gray-400">{{ $row['sn'] }}</td><td class="py-2 px-3 text-gray-700">{{ $row['challenge'] }}</td><td class="py-2 px-3 text-gray-600">{{ $row['impact'] }}</td></tr>
+        @forelse((is_array($appraisal->section5) ? $appraisal->section5 : (json_decode($appraisal->getRawOriginal('section5'), true) ?? [])) as $i => $row)
+        <tr class="border-t border-[#f0edf8]"><td class="py-2 px-3 text-gray-400">{{ $row['sn'] ?? $i + 1 }}</td><td class="py-2 px-3 text-gray-700">{{ $row['challenge'] ?? '—' }}</td><td class="py-2 px-3 text-gray-600">{{ $row['impact'] ?? '—' }}</td></tr>
         @empty
         <tr><td colspan="3" class="py-3 px-3 text-gray-400 italic text-sm">None reported.</td></tr>
         @endforelse
@@ -272,11 +275,11 @@
   </div>
 </div>
 
-{{-- Section 6: Training (supervisor fills recommendation) --}}
+{{-- Section 6: Training (supervisor fills Area, Training & Recommendation — always editable for assigned supervisor) --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden mb-4">
   <div class="bg-[#eeedfe] px-5 py-3 flex items-center justify-between">
     <div class="font-semibold text-[#3C3489] text-sm">Section 6: Capacity Development & Training Needs</div>
-    <span class="text-[10px] text-[#534AB7]">Supervisor fills recommendation</span>
+    <span class="text-[10px] text-[#534AB7]">Supervisor editable</span>
   </div>
   <div class="p-5 overflow-x-auto">
     <table class="w-full text-sm">
@@ -284,12 +287,27 @@
       <tbody>
         @forelse((is_array($appraisal->section6) ? $appraisal->section6 : (json_decode($appraisal->getRawOriginal('section6'), true) ?? [])) as $i => $row)
         <tr class="border-t border-[#f0edf8]">
-          <td class="py-2 px-3 text-gray-400">{{ $row['sn'] }}</td>
-          <td class="py-2 px-3 text-gray-700">{{ $row['area'] }}</td>
-          <td class="py-2 px-3 text-gray-600">{{ $row['training'] }}</td>
+          <td class="py-2 px-3 text-gray-400">{{ $row['sn'] ?? $i + 1 }}</td>
+          <td class="py-2 px-3 text-gray-700">
+            @if($canEditTraining)
+              <input type="text" name="section6[{{ $i }}][area]" value="{{ $row['area'] ?? '' }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Area...">
+            @else
+              {{ $row['area'] ?? '—' }}
+            @endif
+          </td>
+          <td class="py-2 px-3 text-gray-600">
+            @if($canEditTraining)
+              <input type="text" name="section6[{{ $i }}][training]" value="{{ $row['training'] ?? '' }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Training...">
+            @else
+              {{ $row['training'] ?? '—' }}
+            @endif
+          </td>
           <td class="py-2 px-3">
-            @if($canEdit)<input type="text" name="section6[{{ $i }}][recommendation]" value="{{ $row['recommendation'] ?? '' }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Your recommendation...">
-            @else{{ $row['recommendation'] ?? '—' }}@endif
+            @if($canEditTraining)
+              <input type="text" name="section6[{{ $i }}][recommendation]" value="{{ $row['recommendation'] ?? '' }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Your recommendation...">
+            @else
+              {{ $row['recommendation'] ?? '—' }}
+            @endif
           </td>
         </tr>
         @empty
@@ -297,82 +315,237 @@
         @endforelse
       </tbody>
     </table>
+    @if($canEditTraining)
+    <button type="button" onclick="addSection6Row()" class="mt-3 inline-flex items-center gap-1.5 text-xs text-[#3C3489] border border-[#e0daf5] px-3 py-1.5 rounded-lg hover:bg-[#f5f0ff] transition">
+      <i class="ti ti-plus"></i> Add row
+    </button>
+    @endif
   </div>
 </div>
 
-{{-- Section 7: Compliance (supervisor scores) --}}
+{{-- Section 7: Compliance to Administrative Policy (mirrors the printed appraisal form — supervisor editable) --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden mb-4">
   <div class="bg-[#eeedfe] px-5 py-3 flex items-center justify-between">
     <div class="font-semibold text-[#3C3489] text-sm">Section 7: Compliance to Administrative Policy</div>
     <span class="text-[11px] bg-[#dddafe] text-[#534AB7] px-2 py-0.5 rounded-full">20%</span>
   </div>
   <div class="p-5">
-    <p class="text-xs text-gray-400 mb-3">Supervisor scores only (0–10 each). Points deducted will reflect in the final appraisal score.</p>
+    <p class="text-xs text-gray-400 mb-3">Rating – Points deducted will be reflected in the first quarter appraisal scores.</p>
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead><tr class="bg-[#f5f0ff]"><th class="w-8 py-2 px-3 text-[11px] text-[#534AB7] font-medium">#</th><th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Policy / Area</th><th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center">Score (0–10)</th><th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Comments</th></tr></thead>
+      <table class="w-full text-sm border border-[#e0daf5]">
+        <thead>
+          <tr class="bg-[#f5f0ff]">
+            <th class="w-8 py-2 px-3 text-[11px] text-[#534AB7] font-medium text-left border border-[#e0daf5]">#</th>
+            <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium border border-[#e0daf5]">Policy / Areas for Compliance</th>
+            <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center border border-[#e0daf5] w-28">Score (0–10)</th>
+            <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium border border-[#e0daf5]">Comments</th>
+          </tr>
+        </thead>
         <tbody>
-          @foreach(is_array($appraisal->section7_items) ? $appraisal->section7_items : (json_decode($appraisal->getRawOriginal('section7_items'), true) ?? $appraisal->getDefaultSection7()) as $i => $item)
+          @php
+            // Hardcoded policy list — matches the printed appraisal form exactly.
+            // 'key' is a stable slug used to look up/save this row's score & comment,
+            // independent of any stored order or DB content.
+            $section7Policies = [
+              ['key' => 'attendance',      'sn' => 1, 'label' => 'Attendance at work'],
+              ['key' => 'chapel',          'sn' => 2, 'label' => 'Chapel Attendance'],
+              ['key' => 'punctuality',     'sn' => 3, 'label' => 'Punctuality to work'],
+              ['key' => 'reports',         'sn' => 4, 'label' => 'Prompt and consistent submission of weekly and monthly reports'],
+              ['key' => 'participation',   'sn' => 5, 'label' => 'Participation in', 'sub' => [
+                  'Dept./Group Staff Meetings',
+                  'Dept./Group Prayer Meetings',
+                  'Blue Elite Book Club Study',
+                  'All other meetings',
+              ]],
+            ];
+            $section7Saved = is_array($appraisal->section7_items) ? $appraisal->section7_items : (json_decode($appraisal->getRawOriginal('section7_items'), true) ?? []);
+          @endphp
+          @foreach($section7Policies as $policy)
+          @php
+            $saved = $section7Saved[$policy['key']] ?? [];
+          @endphp
           <tr class="border-t border-[#f0edf8]">
-            <td class="py-2 px-3 text-gray-400">{{ $item['sn'] }}</td>
-            <td class="py-2 px-3 text-gray-700">{{ $item['policy'] }}</td>
-            <td class="py-2 px-3 text-center">
-              @if($canEdit)<input type="number" name="section7[{{ $i }}][score]" min="0" max="10" value="{{ $item['score'] }}" class="w-16 text-center border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]">
-              @else<span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $item['score'] ?? '—' }}</span>@endif
+            <td class="py-2 px-3 text-gray-400 align-top border border-[#e0daf5]">{{ $policy['sn'] }}</td>
+            <td class="py-2 px-3 text-gray-700 align-top border border-[#e0daf5]">
+              {{ $policy['label'] }}
+              @if(!empty($policy['sub']))
+                <ul class="mt-1 pl-4 list-disc text-gray-600 text-[13px]">
+                  @foreach($policy['sub'] as $subItem)
+                  <li>{{ $subItem }}</li>
+                  @endforeach
+                </ul>
+              @endif
             </td>
-            <td class="py-2 px-3">
-              @if($canEdit)<input type="text" name="section7[{{ $i }}][comment]" value="{{ $item['comment'] ?? '' }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Comment...">
-              @else<span class="text-gray-500 text-xs">{{ $item['comment'] ?? '—' }}</span>@endif
+            <td class="py-2 px-3 text-center align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="number" name="section7[{{ $policy['key'] }}][score]" min="0" max="10" value="{{ $saved['score'] ?? 0 }}" class="sec7-score w-16 text-center border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" oninput="updateSection7Total()">
+              @else
+                <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $saved['score'] ?? '—' }}</span>
+              @endif
+            </td>
+            <td class="py-2 px-3 align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="text" name="section7[{{ $policy['key'] }}][comment]" value="{{ $saved['comment'] ?? '' }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Comment...">
+              @else
+                <span class="text-gray-500 text-xs">{{ $saved['comment'] ?? '—' }}</span>
+              @endif
             </td>
           </tr>
           @endforeach
-          <tr class="bg-[#f5f0ff] font-semibold text-[#3C3489]">
-            <td colspan="2" class="py-2 px-3">Total Section 7</td>
-            <td class="py-2 px-3 text-center">{{ collect($appraisal->section7_items)->sum('score') }} / 60</td>
-            <td></td>
+
+          {{-- Misconduct banner row --}}
+          <tr class="bg-[#dce6f5]">
+            <td colspan="4" class="py-1.5 px-3 font-semibold text-[#3C3489] text-xs border border-[#e0daf5]">Indicate records of misconduct in the month</td>
+          </tr>
+
+          {{-- Misconduct item --}}
+          @php
+            $misconduct = is_array($appraisal->section7_misconduct) ? $appraisal->section7_misconduct : (json_decode($appraisal->getRawOriginal('section7_misconduct'), true) ?? ['score' => 0, 'comment' => '']);
+          @endphp
+          <tr class="border-t border-[#f0edf8]">
+            <td class="py-2 px-3 text-gray-400 align-top border border-[#e0daf5]">6</td>
+            <td class="py-2 px-3 text-gray-700 align-top border border-[#e0daf5]">Number of official warnings and other disciplinary actions for negligence or misconduct</td>
+            <td class="py-2 px-3 text-center align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="number" name="section7_misconduct[score]" min="0" max="10" value="{{ $misconduct['score'] ?? 0 }}" class="sec7-score w-16 text-center border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" oninput="updateSection7Total()">
+              @else
+                <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $misconduct['score'] ?? '—' }}</span>
+              @endif
+            </td>
+            <td class="py-2 px-3 align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="text" name="section7_misconduct[comment]" value="{{ $misconduct['comment'] ?? '' }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Comment...">
+              @else
+                <span class="text-gray-500 text-xs">{{ $misconduct['comment'] ?? '—' }}</span>
+              @endif
+            </td>
+          </tr>
+
+          @php
+            $sec7ScoreSum = 0;
+            foreach ($section7Policies as $policy) {
+              $sec7ScoreSum += $section7Saved[$policy['key']]['score'] ?? 0;
+            }
+            $sec7ScoreSum += $misconduct['score'] ?? 0;
+            $sec7ComplianceMax = (count($section7Policies) + 1) * 10;
+
+            $sec7SummarySum = ($appraisal->overall_contribution_score ?? 0)
+              + ($appraisal->key_strengths_score ?? 0)
+              + ($appraisal->areas_for_improvement_score ?? 0);
+            $sec7SummaryMax = 30;
+          @endphp
+
+          {{-- Supervisor Performance Summary banner --}}
+          <tr class="bg-[#eeedfe]">
+            <td colspan="4" class="py-1.5 px-3 font-semibold text-[#3C3489] text-xs border border-[#e0daf5]">SUPERVISOR PERFORMANCE SUMMARY</td>
+          </tr>
+          <tr class="border-t border-[#f0edf8]">
+            <td colspan="2" class="py-2 px-3 text-gray-700 align-top border border-[#e0daf5]">Overall Contribution to Department Goals:</td>
+            <td class="py-2 px-3 text-center align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="number" name="overall_contribution_score" min="0" max="10" value="{{ $appraisal->overall_contribution_score ?? 0 }}" class="sec7-summary-score w-16 text-center border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" oninput="updateSection7Total()">
+              @else
+                <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $appraisal->overall_contribution_score ?? '—' }}</span>
+              @endif
+            </td>
+            <td class="py-2 px-3 align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <textarea name="overall_contribution" rows="1" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]">{{ $appraisal->overall_contribution }}</textarea>
+              @else
+                <span class="text-gray-600">{{ $appraisal->overall_contribution ?: '—' }}</span>
+              @endif
+            </td>
+          </tr>
+
+          {{-- Key Strengths --}}
+          <tr class="border-t border-[#f0edf8]">
+            <td colspan="2" class="py-2 px-3 text-gray-700 align-top border border-[#e0daf5]">Key Strengths:</td>
+            <td class="py-2 px-3 text-center align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="number" name="key_strengths_score" min="0" max="10" value="{{ $appraisal->key_strengths_score ?? 0 }}" class="sec7-summary-score w-16 text-center border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" oninput="updateSection7Total()">
+              @else
+                <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $appraisal->key_strengths_score ?? '—' }}</span>
+              @endif
+            </td>
+            <td class="py-2 px-3 align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <textarea name="key_strengths" rows="1" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]">{{ $appraisal->key_strengths }}</textarea>
+              @else
+                <span class="text-gray-600">{{ $appraisal->key_strengths ?: '—' }}</span>
+              @endif
+            </td>
+          </tr>
+
+          {{-- Areas for Improvement --}}
+          <tr class="border-t border-[#f0edf8]">
+            <td colspan="2" class="py-2 px-3 text-gray-700 align-top border border-[#e0daf5]">Areas for Improvement:</td>
+            <td class="py-2 px-3 text-center align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="number" name="areas_for_improvement_score" min="0" max="10" value="{{ $appraisal->areas_for_improvement_score ?? 0 }}" class="sec7-summary-score w-16 text-center border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" oninput="updateSection7Total()">
+              @else
+                <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $appraisal->areas_for_improvement_score ?? '—' }}</span>
+              @endif
+            </td>
+            <td class="py-2 px-3 align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <textarea name="areas_for_improvement" rows="1" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]">{{ $appraisal->areas_for_improvement }}</textarea>
+              @else
+                <span class="text-gray-600">{{ $appraisal->areas_for_improvement ?: '—' }}</span>
+              @endif
+            </td>
+          </tr>
+
+          {{-- Total Score (auto-computed: Compliance subtotal + Performance Summary subtotal) --}}
+          <tr class="bg-[#f5f0ff] font-semibold">
+            <td colspan="2" class="py-2 px-3 text-red-600 align-top border border-[#e0daf5]">TOTAL SCORE <span class="font-normal text-gray-500 text-xs">(auto-calculated: Compliance + Performance Summary)</span></td>
+            <td class="py-2 px-3 text-center align-top border border-[#e0daf5]">
+              <span class="bg-[#3C3489] text-white font-semibold px-2 py-0.5 rounded-full text-xs" id="sec7-grand-total-badge">{{ $sec7ScoreSum + $sec7SummarySum }}</span>
+              @if($canEditTraining)
+                <input type="hidden" name="total_score" id="sec7-grand-total-input" value="{{ $sec7ScoreSum + $sec7SummarySum }}">
+              @endif
+            </td>
+            <td class="py-2 px-3 align-top border border-[#e0daf5]">
+              @if($canEditTraining)
+                <input type="text" name="total_score_comment" value="{{ $appraisal->total_score_comment }}" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Comment...">
+              @else
+                <span class="text-gray-500 text-xs">{{ $appraisal->total_score_comment ?: '—' }}</span>
+              @endif
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
-    @if($canEdit)
-    <div class="grid grid-cols-3 gap-4 mt-4">
-      <div>
-        <label class="block text-xs text-gray-400 mb-1">Overall Contribution to Dept Goals</label>
-        <textarea name="overall_contribution" rows="2" class="w-full border border-[#e0daf5] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#7F77DD]">{{ $appraisal->overall_contribution }}</textarea>
+    <div class="mt-3 grid grid-cols-2 gap-3">
+      <div class="flex items-center justify-between bg-[#f5f0ff] border border-[#e0daf5] rounded-lg px-4 py-2.5">
+        <span class="text-sm font-medium text-[#3C3489]">Policy / Compliance Total</span>
+        <span class="text-sm font-semibold text-[#3C3489]"><span id="sec7-compliance-total">{{ $sec7ScoreSum }}</span> / {{ $sec7ComplianceMax }}</span>
       </div>
-      <div>
-        <label class="block text-xs text-gray-400 mb-1">Key Strengths</label>
-        <textarea name="key_strengths" rows="2" class="w-full border border-[#e0daf5] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#7F77DD]">{{ $appraisal->key_strengths }}</textarea>
-      </div>
-      <div>
-        <label class="block text-xs text-gray-400 mb-1">Areas for Improvement</label>
-        <textarea name="areas_for_improvement" rows="2" class="w-full border border-[#e0daf5] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#7F77DD]">{{ $appraisal->areas_for_improvement }}</textarea>
+      <div class="flex items-center justify-between bg-[#f5f0ff] border border-[#e0daf5] rounded-lg px-4 py-2.5">
+        <span class="text-sm font-medium text-[#3C3489]">Performance Summary Total</span>
+        <span class="text-sm font-semibold text-[#3C3489]"><span id="sec7-summary-total">{{ $sec7SummarySum }}</span> / {{ $sec7SummaryMax }}</span>
       </div>
     </div>
-    @else
-    <div class="grid grid-cols-3 gap-4 mt-4 text-sm">
-      <div><div class="text-xs text-gray-400 mb-1">Overall Contribution</div><div>{{ $appraisal->overall_contribution ?: '—' }}</div></div>
-      <div><div class="text-xs text-gray-400 mb-1">Key Strengths</div><div>{{ $appraisal->key_strengths ?: '—' }}</div></div>
-      <div><div class="text-xs text-gray-400 mb-1">Areas for Improvement</div><div>{{ $appraisal->areas_for_improvement ?: '—' }}</div></div>
+    <div class="mt-2 flex items-center justify-between bg-[#3C3489] rounded-lg px-4 py-2.5">
+      <span class="text-sm font-medium text-white">Section 7 Grand Total</span>
+      <span class="text-sm font-semibold text-white"><span id="sec7-grand-total">{{ $sec7ScoreSum + $sec7SummarySum }}</span> / {{ $sec7ComplianceMax + $sec7SummaryMax }}</span>
     </div>
-    @endif
   </div>
 </div>
 
-{{-- Work Confirmation --}}
+{{-- Work Confirmation (always editable for assigned supervisor) --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl p-5 mb-4">
   <div class="font-semibold text-gray-800 text-sm mb-2">Work Confirmation</div>
   <p class="text-xs text-gray-500 mb-3">I hereby confirm that the above-mentioned staff member was actively engaged in assigned duties during the period under review and is eligible for payment.</p>
   <div class="flex items-center gap-3">
     <label class="text-sm text-gray-600 whitespace-nowrap">Percentage of Salary to be Paid:</label>
-    @if($canEdit)
+    @if($canEditTraining)
     <input type="number" name="salary_percent" min="0" max="100" value="{{ $appraisal->salary_percent ?? 100 }}" class="w-20 border border-[#e0daf5] rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-[#7F77DD]">
     <span class="text-sm text-gray-400">%</span>
     @else
     <strong class="text-gray-900">{{ $appraisal->salary_percent ?? '—' }}%</strong>
     @endif
   </div>
-  @if($canEdit)
+  @if($canEditTraining)
   <div class="mt-3">
     <label class="block text-xs text-gray-400 mb-1">Supervisor Comments</label>
     <textarea name="supervisor_comments" rows="2" class="w-full border border-[#e0daf5] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Any additional comments...">{{ $appraisal->supervisor_comments }}</textarea>
@@ -382,16 +555,73 @@
   @endif
 </div>
 
-@if($canEdit)
+@if($canEdit || $canEditTraining)
 <div class="flex gap-3 mt-5">
   <button type="submit" formaction="{{ route('supervisor.appraisal.save', $appraisal) }}" class="inline-flex items-center gap-2 border border-[#7F77DD] text-[#3C3489] px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#eeedfe] transition">
     <i class="ti ti-device-floppy"></i> Save grades
   </button>
+  @if($canEdit)
   <button type="submit" formaction="{{ route('supervisor.appraisal.forward', $appraisal) }}" onclick="return confirm('Forward this appraisal to HR? You cannot edit it after forwarding.')" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#26215C] transition">
     <i class="ti ti-arrow-right"></i> Forward to Staff Performance
   </button>
+  @endif
 </div>
 @endif
 
 </form>
+@endsection
+
+@section('scripts')
+<script>
+function updateSection7Total() {
+  let complianceTotal = 0;
+  document.querySelectorAll('.sec7-score').forEach(input => {
+    complianceTotal += parseInt(input.value) || 0;
+  });
+
+  let summaryTotal = 0;
+  document.querySelectorAll('.sec7-summary-score').forEach(input => {
+    summaryTotal += parseInt(input.value) || 0;
+  });
+
+  const grandTotal = complianceTotal + summaryTotal;
+
+  const complianceEl = document.getElementById('sec7-compliance-total');
+  const summaryEl = document.getElementById('sec7-summary-total');
+  const grandEl = document.getElementById('sec7-grand-total');
+  const grandBadgeEl = document.getElementById('sec7-grand-total-badge');
+  const grandInputEl = document.getElementById('sec7-grand-total-input');
+
+  if (complianceEl) complianceEl.textContent = complianceTotal;
+  if (summaryEl) summaryEl.textContent = summaryTotal;
+  if (grandEl) grandEl.textContent = grandTotal;
+  if (grandBadgeEl) grandBadgeEl.textContent = grandTotal;
+  if (grandInputEl) grandInputEl.value = grandTotal;
+}
+
+document.addEventListener('DOMContentLoaded', updateSection7Total);
+
+function addSection6Row() {
+  const tbody = document.querySelector('table tbody');
+  // Section 6 table is the first tbody after the "Capacity Development" heading;
+  // grabbing it more precisely to avoid touching other tables.
+  const section6Table = Array.from(document.querySelectorAll('table')).find(t =>
+    t.closest('div')?.previousElementSibling?.textContent?.includes('Capacity Development') ||
+    t.innerHTML.includes('section6[')
+  );
+  if (!section6Table) return;
+  const body = section6Table.querySelector('tbody');
+  const rowCount = body.querySelectorAll('tr').length;
+  const newIndex = rowCount;
+  const tr = document.createElement('tr');
+  tr.className = 'border-t border-[#f0edf8]';
+  tr.innerHTML = `
+    <td class="py-2 px-3 text-gray-400">${newIndex + 1}</td>
+    <td class="py-2 px-3"><input type="text" name="section6[${newIndex}][area]" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Area..."></td>
+    <td class="py-2 px-3"><input type="text" name="section6[${newIndex}][training]" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Training..."></td>
+    <td class="py-2 px-3"><input type="text" name="section6[${newIndex}][recommendation]" class="w-full border border-[#e0daf5] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Your recommendation..."></td>
+  `;
+  body.appendChild(tr);
+}
+</script>
 @endsection

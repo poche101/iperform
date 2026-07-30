@@ -36,13 +36,13 @@
     {{-- Target Field --}}
     <div class="mb-3">
       <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-        Target <span class="text-gray-400 font-normal">(What was the expected goal?)</span>
+        Target/Task <span class="text-gray-400 font-normal">(What was the expected goal?)</span>
       </label>
       <textarea name="target" rows="2" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] resize-none" placeholder="e.g. Reach 500 members, Complete 10 outreaches this month">{{ old('target') }}</textarea>
     </div>
 
     <div class="mb-3">
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Details / Achievement</label>
+      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Details</label>
       <textarea name="details" rows="3" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] resize-none" placeholder="What did you accomplish? Add context your supervisor needs.">{{ old('details') }}</textarea>
     </div>
 

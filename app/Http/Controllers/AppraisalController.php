@@ -170,17 +170,15 @@ class AppraisalController extends Controller
         $appraisal->update(['status'=>'with_staff_performance','supervisor_confirmed'=>true,'forwarded_at'=>now()]);
         return redirect()->route('supervisor.dashboard')->with('success', 'Appraisal forwarded to Staff Performance!');
     }
-
-    /** Staff Performance: show appraisal */
-    public function staffPerformanceShow(Appraisal $appraisal)
-    {
-        abort_unless(Auth::user()->isStaffPerformance(), 403);
-        $appraisal->load(['kras','tasks','innovations','competencies','staff','supervisor','cycle']);
-        return view('appraisal.staff_performance', compact('appraisal'));
-    }
-
-    /** Staff Performance: auto-calculate totals */
-    public function staffPerformanceAutoCalculate(Appraisal $appraisal)
+/** HR (Staff Performance): show appraisal */
+public function hrShow(Appraisal $appraisal)
+{
+    abort_unless(Auth::user()->isStaffPerformance(), 403);
+    $appraisal->load(['kras','tasks','innovations','competencies','staff','supervisor','cycle']);
+    return view('appraisal.hr', compact('appraisal'));
+}
+    /** HR (Staff Performance): auto-calculate totals */
+    public function hrAutoCalculate(Appraisal $appraisal)
     {
         abort_unless(Auth::user()->isStaffPerformance(), 403);
         $appraisal->load(['kras','tasks','innovations']);
@@ -195,8 +193,8 @@ class AppraisalController extends Controller
         ]);
     }
 
-    /** Staff Performance: save and approve */
-    public function staffPerformanceApprove(Request $request, Appraisal $appraisal)
+    /** HR (Staff Performance): save and approve */
+    public function hrApprove(Request $request, Appraisal $appraisal)
     {
         abort_unless(Auth::user()->isStaffPerformance(), 403);
         $appraisal->update([
@@ -210,7 +208,7 @@ class AppraisalController extends Controller
             'status' => 'approved',
             'approved_at' => now(),
         ]);
-        return redirect()->route('staff_performance.dashboard')->with('success', 'Appraisal approved!');
+        return redirect()->route('hr.dashboard')->with('success', 'Appraisal approved!');
     }
 
     /** AI: generate Staff Performance comment */

@@ -12,6 +12,7 @@ class User extends Authenticatable
     protected $fillable = ['name','username','email','password','role','department','designation','title','supervisor_id'];
     protected $hidden = ['password','remember_token'];
 
+    public function isHR() { return $this->role === 'staff_performance'; }
     public function supervisor() { return $this->belongsTo(User::class, 'supervisor_id'); }
     public function subordinates() { return $this->hasMany(User::class, 'supervisor_id'); }
     public function appraisals() { return $this->hasMany(Appraisal::class, 'staff_id'); }

@@ -67,6 +67,33 @@
   </div>
 </div>
 
+{{-- Rating Guide --}}
+<div class="bg-white border border-[#e0daf5] rounded-xl p-5 mb-5">
+  <div class="flex items-center justify-between mb-4">
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Rating guide</div>
+    <i class="ti ti-info-circle text-gray-300 text-sm"></i>
+  </div>
+  <div class="space-y-2.5">
+    @foreach([
+      ['9–10', 'bg-emerald-50 text-emerald-700 border-emerald-200', 'bg-emerald-500', 'Exceptional Performer', 'Eligible for recognition, commendation, and leadership opportunities.'],
+      ['7–8',  'bg-[#eeedfe] text-[#3C3489] border-[#e0daf5]',      'bg-[#3C3489]',    'High Performer',        'Strong and reliable performer with opportunities for growth.'],
+      ['5–6',  'bg-amber-50 text-amber-700 border-amber-200',        'bg-[#EF9F27]',    'Meets Basic Expectations', 'Acceptable performance but improvement is expected.'],
+      ['3–4',  'bg-orange-50 text-orange-700 border-orange-200',     'bg-orange-500',   'Needs Improvement',     'Requires coaching, mentoring, and a Performance Improvement Plan (PIP).'],
+      ['1–2',  'bg-rose-50 text-rose-700 border-rose-200',           'bg-rose-500',     'Unsatisfactory',        'Immediate intervention, close monitoring, and possible disciplinary review if no improvement occurs.'],
+    ] as [$range, $badgeClasses, $dot, $title, $desc])
+    <div class="flex items-start gap-3 p-3 rounded-lg border {{ $badgeClasses }}">
+      <div class="flex items-center justify-center w-10 h-8 rounded-md {{ $dot }} text-white text-xs font-bold flex-shrink-0 mt-0.5">
+        {{ $range }}
+      </div>
+      <div class="min-w-0">
+        <div class="text-sm font-semibold leading-tight">{{ $title }}</div>
+        <div class="text-xs opacity-80 mt-0.5">{{ $desc }}</div>
+      </div>
+    </div>
+    @endforeach
+  </div>
+</div>
+
 {{-- How it works --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl p-5">
   <div class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">How it works</div>

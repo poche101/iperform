@@ -10,22 +10,65 @@
 @endsection
 
 @section('content')
-@php $canEdit = $appraisal->status === 'with_staff_performance'; @endphp
+@php
+  // Broadened from a single exact-status check so this section stays editable
+  // across the statuses HR actually sees it in, and only locks once approved.
+  $canEdit = $appraisal->status !== 'approved';
+@endphp
 
-<div class="flex items-start justify-between mb-5">
-  <div>
-    <div class="text-sm text-gray-400 uppercase tracking-wider font-medium">Staff Performance Appraisal Review</div>
-    <div class="text-2xl font-bold text-gray-900">{{ $appraisal->staff->name }}</div>
-    <div class="text-sm text-gray-500">{{ $appraisal->staff->department }} · {{ $appraisal->cycle->name }}</div>
+<div class="bg-white border border-[#e0daf5] rounded-xl p-6 mb-5">
+  <div class="flex items-start justify-between gap-6 mb-5">
+    <img src="{{ asset('images/lw.png') }}" alt="LoveWorld" class="h-20 w-20 object-contain">
+    <div class="text-center flex-1 pt-2">
+      <div class="text-lg font-bold text-[#8bc34a] tracking-wide uppercase">Staff Performance Appraisal Form</div>
+      <div class="text-lg font-bold text-[#8bc34a] tracking-wide uppercase">{{ $appraisal->cycle->name }}</div>
+    </div>
+    <div class="flex gap-2 pt-2">
+      <a href="{{ route('appraisal.pdf', $appraisal) }}" class="inline-flex items-center gap-2 bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-800 transition">
+        <i class="ti ti-file-download"></i> Export PDF
+      </a>
+      <a href="{{ route('hr.dashboard') }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
+        <i class="ti ti-arrow-left"></i> Back
+      </a>
+    </div>
   </div>
-  <div class="flex gap-2">
-    <a href="{{ route('appraisal.pdf', $appraisal) }}" class="inline-flex items-center gap-2 bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-800 transition">
-      <i class="ti ti-file-download"></i> Export PDF
-    </a>
-    <a href="{{ route('hr.dashboard') }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
-      <i class="ti ti-arrow-left"></i> Back
-    </a>
+
+  <div class="mb-4">
+    <div class="font-bold text-gray-800 text-sm mb-1">GUIDELINES – HOW TO USE THIS APPRAISAL FORM</div>
+    <div class="text-blue-700 text-sm leading-relaxed">
+      Provide full details of personal data in the Vital Information Section.<br>
+      Use the 'rating scales' (0–10) to indicate the value of area.<br>
+      Give details of achievements, highlighting major areas.
+    </div>
   </div>
+
+  <table class="w-full text-sm border border-gray-300">
+    <tr class="bg-[#c9d6ea]"><td colspan="4" class="py-1.5 px-3 font-bold text-gray-800 border border-gray-300">VITAL INFORMATION</td></tr>
+    <tr>
+      <td class="py-2 px-3 font-semibold text-gray-700 border border-gray-300 w-1/5">NAME OF STAFF:</td>
+      <td class="py-2 px-3 border border-gray-300 w-3/10">{{ $appraisal->staff->name }}</td>
+      <td class="py-2 px-3 font-semibold text-gray-700 border border-gray-300 w-1/5">DEPARTMENT/UNIT:</td>
+      <td class="py-2 px-3 border border-gray-300">{{ $appraisal->staff->department }}</td>
+    </tr>
+    <tr>
+      <td class="py-2 px-3 font-semibold text-gray-700 border border-gray-300">NAME OF SUPERVISOR:</td>
+      <td class="py-2 px-3 border border-gray-300">{{ $appraisal->supervisor->name ?? '—' }}</td>
+      <td class="py-2 px-3 font-semibold text-gray-700 border border-gray-300">RANK:</td>
+      <td class="py-2 px-3 border border-gray-300">{{ $appraisal->staff->rank ?? '—' }}</td>
+    </tr>
+    <tr>
+      <td class="py-2 px-3 font-semibold text-gray-700 border border-gray-300">PERIOD APPRAISED:</td>
+      <td class="py-2 px-3 border border-gray-300 text-red-600 font-semibold">{{ $appraisal->cycle->name }}</td>
+      <td class="py-2 px-3 font-semibold text-gray-700 border border-gray-300">DESIGNATION:</td>
+      <td class="py-2 px-3 border border-gray-300">{{ $appraisal->staff->designation }}</td>
+    </tr>
+    <tr>
+      <td class="py-2 px-3 font-semibold text-gray-700 border border-gray-300">DATE SUBMITTED:</td>
+      <td class="py-2 px-3 border border-gray-300">{{ $appraisal->submitted_at?->format('d M Y') ?? '—' }}</td>
+      <td class="py-2 px-3 border border-gray-300"></td>
+      <td class="py-2 px-3 border border-gray-300"></td>
+    </tr>
+  </table>
 </div>
 
 {{-- Read-only sections 1-4 --}}
@@ -92,7 +135,7 @@
           <td class="py-2 px-3 text-center"><span class="bg-[#eeedfe] text-[#3C3489] font-semibold px-2 py-0.5 rounded-full text-xs">{{ $c->staff_score ?? '—' }}</span></td>
           <td class="py-2 px-3 text-center"><span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $c->supervisor_score ?? '—' }}</span></td>
         </tr>
-        @foreach
+        @endforeach
       </tbody>
     </table>
   </div>
@@ -105,29 +148,101 @@
     <span class="text-[11px] bg-[#dddafe] text-[#534AB7] px-2 py-0.5 rounded-full">20%</span>
   </div>
   <div class="p-5 overflow-x-auto">
+    @php
+      // Hardcoded policy list — must stay in sync with the supervisor grading form
+      // (resources/views/appraisal/supervisor.blade.php), since section7_items is now
+      // stored keyed by these stable slugs rather than by numeric index.
+      $section7Policies = [
+        ['key' => 'attendance',    'sn' => 1, 'label' => 'Attendance at work'],
+        ['key' => 'chapel',        'sn' => 2, 'label' => 'Chapel Attendance'],
+        ['key' => 'punctuality',   'sn' => 3, 'label' => 'Punctuality to work'],
+        ['key' => 'reports',       'sn' => 4, 'label' => 'Prompt and consistent submission of weekly and monthly reports'],
+        ['key' => 'participation', 'sn' => 5, 'label' => 'Participation in', 'sub' => [
+            'Dept./Group Staff Meetings',
+            'Dept./Group Prayer Meetings',
+            'Blue Elite Book Club Study',
+            'All other meetings',
+        ]],
+      ];
+      $section7Saved = is_array($appraisal->section7_items) ? $appraisal->section7_items : (json_decode($appraisal->getRawOriginal('section7_items'), true) ?? []);
+      $misconduct = is_array($appraisal->section7_misconduct) ? $appraisal->section7_misconduct : (json_decode($appraisal->getRawOriginal('section7_misconduct'), true) ?? ['score' => 0, 'comment' => '']);
+
+      $sec7ComplianceSum = 0;
+      foreach ($section7Policies as $policy) {
+        $sec7ComplianceSum += $section7Saved[$policy['key']]['score'] ?? 0;
+      }
+      $sec7ComplianceSum += $misconduct['score'] ?? 0;
+      $sec7ComplianceMax = (count($section7Policies) + 1) * 10;
+
+      $sec7SummarySum = ($appraisal->overall_contribution_score ?? 0)
+        + ($appraisal->key_strengths_score ?? 0)
+        + ($appraisal->areas_for_improvement_score ?? 0);
+      $sec7SummaryMax = 30;
+    @endphp
     <table class="w-full text-sm">
       <thead><tr class="bg-[#f5f0ff]"><th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium">#</th><th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Policy</th><th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center">Score</th><th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Comments</th></tr></thead>
       <tbody>
-        @foreach(is_array($appraisal->section7_items) ? $appraisal->section7_items : (json_decode($appraisal->getRawOriginal('section7_items'), true) ?? $appraisal->getDefaultSection7()) as $item)
+        @foreach($section7Policies as $policy)
+        @php $saved = $section7Saved[$policy['key']] ?? []; @endphp
         <tr class="border-t border-[#f0edf8]">
-          <td class="py-2 px-3 text-gray-400">{{ $item['sn'] }}</td>
-          <td class="py-2 px-3 text-gray-700">{{ $item['policy'] }}</td>
-          <td class="py-2 px-3 text-center"><span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $item['score'] ?? '—' }}</span></td>
-          <td class="py-2 px-3 text-gray-500 text-xs">{{ $item['comment'] ?? '—' }}</td>
+          <td class="py-2 px-3 text-gray-400">{{ $policy['sn'] }}</td>
+          <td class="py-2 px-3 text-gray-700">
+            {{ $policy['label'] }}
+            @if(!empty($policy['sub']))
+              <ul class="mt-1 pl-4 list-disc text-gray-600 text-[13px]">
+                @foreach($policy['sub'] as $subItem)
+                <li>{{ $subItem }}</li>
+                @endforeach
+              </ul>
+            @endif
+          </td>
+          <td class="py-2 px-3 text-center"><span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $saved['score'] ?? '—' }}</span></td>
+          <td class="py-2 px-3 text-gray-500 text-xs">{{ $saved['comment'] ?? '—' }}</td>
         </tr>
         @endforeach
+
+        <tr class="bg-[#dce6f5]">
+          <td colspan="4" class="py-1.5 px-3 font-semibold text-[#3C3489] text-xs">Indicate records of misconduct in the month</td>
+        </tr>
+        <tr class="border-t border-[#f0edf8]">
+          <td class="py-2 px-3 text-gray-400">6</td>
+          <td class="py-2 px-3 text-gray-700">Number of official warnings and other disciplinary actions for negligence or misconduct</td>
+          <td class="py-2 px-3 text-center"><span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $misconduct['score'] ?? '—' }}</span></td>
+          <td class="py-2 px-3 text-gray-500 text-xs">{{ $misconduct['comment'] ?? '—' }}</td>
+        </tr>
+
         <tr class="bg-[#f5f0ff] font-semibold text-[#3C3489]">
-          <td colspan="2" class="py-2 px-3">Total Section 7</td>
-          <td class="py-2 px-3 text-center">{{ collect($appraisal->section7_items)->sum('score') }} / 60</td>
+          <td colspan="2" class="py-2 px-3">Policy / Compliance Total</td>
+          <td class="py-2 px-3 text-center">{{ $sec7ComplianceSum }} / {{ $sec7ComplianceMax }}</td>
           <td></td>
         </tr>
       </tbody>
     </table>
     <div class="grid grid-cols-3 gap-4 mt-4 text-sm">
-      <div><div class="text-xs text-gray-400 mb-1">Overall Contribution</div><div class="text-gray-700">{{ $appraisal->overall_contribution ?: '—' }}</div></div>
-      <div><div class="text-xs text-gray-400 mb-1">Key Strengths</div><div class="text-gray-700">{{ $appraisal->key_strengths ?: '—' }}</div></div>
-      <div><div class="text-xs text-gray-400 mb-1">Areas for Improvement</div><div class="text-gray-700">{{ $appraisal->areas_for_improvement ?: '—' }}</div></div>
+      <div>
+        <div class="text-xs text-gray-400 mb-1">Overall Contribution <span class="text-[#3C3489] font-semibold">({{ $appraisal->overall_contribution_score ?? '—' }}/10)</span></div>
+        <div class="text-gray-700">{{ $appraisal->overall_contribution ?: '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs text-gray-400 mb-1">Key Strengths <span class="text-[#3C3489] font-semibold">({{ $appraisal->key_strengths_score ?? '—' }}/10)</span></div>
+        <div class="text-gray-700">{{ $appraisal->key_strengths ?: '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs text-gray-400 mb-1">Areas for Improvement <span class="text-[#3C3489] font-semibold">({{ $appraisal->areas_for_improvement_score ?? '—' }}/10)</span></div>
+        <div class="text-gray-700">{{ $appraisal->areas_for_improvement ?: '—' }}</div>
+      </div>
     </div>
+    <div class="mt-3 flex items-center justify-between bg-[#f5f0ff] border border-[#e0daf5] rounded-lg px-4 py-2.5 text-sm">
+      <span class="font-medium text-[#3C3489]">Performance Summary Total</span>
+      <span class="font-semibold text-[#3C3489]">{{ $sec7SummarySum }} / {{ $sec7SummaryMax }}</span>
+    </div>
+    <div class="mt-2 flex items-center justify-between bg-[#3C3489] rounded-lg px-4 py-2.5 text-sm">
+      <span class="font-medium text-white">Section 7 Grand Total</span>
+      <span class="font-semibold text-white">{{ $sec7ComplianceSum + $sec7SummarySum }} / {{ $sec7ComplianceMax + $sec7SummaryMax }}</span>
+    </div>
+    @if($appraisal->total_score_comment)
+    <div class="mt-3 text-xs text-gray-500"><span class="text-gray-400">Total score comment:</span> {{ $appraisal->total_score_comment }}</div>
+    @endif
   </div>
 </div>
 

@@ -250,20 +250,53 @@ td { padding: 5px 8px; border: 0.5px solid #e0daf5; vertical-align: top; }
     <div class="section-header-purple">
       Section 7: Compliance to Administrative Policy <span class="section-weight">20%</span>
     </div>
+    @php
+      // Hardcoded policy list — must stay in sync with the supervisor grading form
+      // (resources/views/appraisal/supervisor.blade.php) and review.blade.php, since
+      // section7_items is now stored keyed by these stable slugs rather than by
+      // numeric index.
+      $section7Policies = [
+          ['key' => 'attendance',    'sn' => 1, 'label' => 'Attendance at work'],
+          ['key' => 'chapel',        'sn' => 2, 'label' => 'Chapel Attendance'],
+          ['key' => 'punctuality',   'sn' => 3, 'label' => 'Punctuality to work'],
+          ['key' => 'reports',       'sn' => 4, 'label' => 'Prompt and consistent submission of weekly and monthly reports'],
+          ['key' => 'participation', 'sn' => 5, 'label' => 'Participation in Dept./Group Staff Meetings, Dept./Group Prayer Meetings, Blue Elite Book Club Study, All other meetings'],
+      ];
+      $section7Saved = is_array($appraisal->section7_items)
+          ? $appraisal->section7_items
+          : (json_decode($appraisal->getRawOriginal('section7_items'), true) ?? []);
+      $misconduct = is_array($appraisal->section7_misconduct)
+          ? $appraisal->section7_misconduct
+          : (json_decode($appraisal->getRawOriginal('section7_misconduct'), true) ?? ['score' => 0, 'comment' => '']);
+
+      $sec7Total = 0;
+      foreach ($section7Policies as $policy) {
+          $sec7Total += $section7Saved[$policy['key']]['score'] ?? 0;
+      }
+      $sec7Total += $misconduct['score'] ?? 0;
+      $sec7Max = (count($section7Policies) + 1) * 10;
+    @endphp
     <table class="policy-table">
       <thead><tr><th style="width:5%">#</th><th style="width:50%">Policy / Area</th><th style="width:15%; text-align:center">Score (0–10)</th><th style="width:30%">Comments</th></tr></thead>
       <tbody>
-        @foreach(is_array($appraisal->section7_items) ? $appraisal->section7_items : (json_decode($appraisal->getRawOriginal('section7_items'), true) ?? $appraisal->getDefaultSection7()) as $item)
+        @foreach($section7Policies as $policy)
+        @php $saved = $section7Saved[$policy['key']] ?? []; @endphp
         <tr>
-          <td>{{ $item['sn'] }}</td>
-          <td>{{ $item['policy'] }}</td>
-          <td style="text-align:center"><span class="score-badge-green">{{ $item['score'] ?? '—' }}</span></td>
-          <td>{{ $item['comment'] ?? '—' }}</td>
+          <td>{{ $policy['sn'] }}</td>
+          <td>{{ $policy['label'] }}</td>
+          <td style="text-align:center"><span class="score-badge-green">{{ $saved['score'] ?? '—' }}</span></td>
+          <td>{{ $saved['comment'] ?? '—' }}</td>
         </tr>
         @endforeach
+        <tr>
+          <td>6</td>
+          <td>Number of official warnings and other disciplinary actions for negligence or misconduct</td>
+          <td style="text-align:center"><span class="score-badge-green">{{ $misconduct['score'] ?? '—' }}</span></td>
+          <td>{{ $misconduct['comment'] ?? '—' }}</td>
+        </tr>
         <tr class="total-row">
           <td colspan="2">Total Section 7 Score</td>
-          <td style="text-align:center">{{ collect($appraisal->section7_items)->sum('score') }} / 60</td>
+          <td style="text-align:center">{{ $sec7Total }} / {{ $sec7Max }}</td>
           <td></td>
         </tr>
       </tbody>
