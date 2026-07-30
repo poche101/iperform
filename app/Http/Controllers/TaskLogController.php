@@ -251,6 +251,6 @@ private function syncGradeToAppraisal(TaskLog $taskLog)
 
         $allStaff = User::where('role', 'staff')->with('supervisor')->get();
 
-        return view('hr.tasks', compact('cycle', 'tasks', 'allStaff'));
+        return view('staff_performance.tasks', compact('cycle', 'tasks', 'allStaff'));
     }
 }
