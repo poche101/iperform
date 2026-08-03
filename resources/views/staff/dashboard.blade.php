@@ -53,10 +53,17 @@
     <div class="w-9 h-9 bg-[#eeedfe] rounded-lg flex items-center justify-center mb-2">
       <i class="ti ti-clock text-[#3C3489] text-lg"></i>
     </div>
-    <div class="text-2xl font-bold text-gray-900">
-      {{ $cycle ? max(0, now()->diffInDays(\Carbon\Carbon::parse($cycle->deadline), false)) : '—' }}d
-    </div>
-    <div class="text-xs text-gray-400 mt-0.5">Until deadline</div>
+   <div class="text-2xl font-bold text-gray-900">
+    @if (!$cycle)
+        —
+    @else
+        @php
+            $diffDays = (int) floor(now()->diffInDays(\Carbon\Carbon::parse($cycle->deadline), false));
+        @endphp
+        {{ $diffDays > 0 ? $diffDays . 'd' : ($diffDays == 0 ? 'Today' : 'Locked') }}
+    @endif
+</div>
+<div class="text-xs text-gray-400 mt-0.5">Until Due Date</div>
   </div>
   <div class="bg-white border border-[#e0daf5] rounded-xl p-4">
     <div class="w-9 h-9 bg-[#eeedfe] rounded-lg flex items-center justify-center mb-2">

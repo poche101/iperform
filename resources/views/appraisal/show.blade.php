@@ -74,6 +74,7 @@
           <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Achievement</th>
           <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-28">% Done</th>
           <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-20">Self Score</th>
+          <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-20">Supervisor Score</th>
         </tr>
       </thead>
       <tbody>
@@ -95,10 +96,13 @@
           <td class="py-2 px-3 text-center align-top">
             <span class="bg-[#eeedfe] text-[#3C3489] font-semibold px-2 py-0.5 rounded-full text-xs">{{ $kra->staff_score ?? '—' }}</span>
           </td>
+          <td class="py-2 px-3 text-center align-top">
+            <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $kra->supervisor_score ?? '—' }}</span>
+          </td>
         </tr>
         @empty
         <tr class="border-t border-[#f0edf8]">
-          <td colspan="6" class="py-4 px-3 text-gray-400 italic text-sm">No KRAs logged yet. Log one from the Tasks page.</td>
+          <td colspan="7" class="py-4 px-3 text-gray-400 italic text-sm">No KRAs logged yet. Log one from the Tasks page.</td>
         </tr>
         @endforelse
       </tbody>
@@ -121,6 +125,7 @@
           <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Performance & Achievement</th>
           <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-28">% Done</th>
           <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-20">Self Score</th>
+          <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-20">Supervisor Score</th>
         </tr>
       </thead>
       <tbody>
@@ -141,10 +146,13 @@
           <td class="py-2 px-3 text-center align-top">
             <span class="bg-[#eeedfe] text-[#3C3489] font-semibold px-2 py-0.5 rounded-full text-xs">{{ $task->staff_score ?? '—' }}</span>
           </td>
+          <td class="py-2 px-3 text-center align-top">
+            <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $task->supervisor_score ?? '—' }}</span>
+          </td>
         </tr>
         @empty
         <tr class="border-t border-[#f0edf8]">
-          <td colspan="5" class="py-4 px-3 text-gray-400 italic text-sm">No tasks logged yet. Log one from the Tasks page.</td>
+          <td colspan="6" class="py-4 px-3 text-gray-400 italic text-sm">No tasks logged yet. Log one from the Tasks page.</td>
         </tr>
         @endforelse
       </tbody>
@@ -167,6 +175,7 @@
           <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Impact</th>
           <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-28">% Done</th>
           <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-20">Self Score</th>
+          <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-20">Supervisor Score</th>
         </tr>
       </thead>
       <tbody>
@@ -187,10 +196,13 @@
           <td class="py-2 px-3 text-center align-top">
             <span class="bg-[#eeedfe] text-[#3C3489] font-semibold px-2 py-0.5 rounded-full text-xs">{{ $inn->staff_score ?? '—' }}</span>
           </td>
+          <td class="py-2 px-3 text-center align-top">
+            <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $inn->supervisor_score ?? '—' }}</span>
+          </td>
         </tr>
         @empty
         <tr class="border-t border-[#f0edf8]">
-          <td colspan="5" class="py-4 px-3 text-gray-400 italic text-sm">No innovations logged yet. Log one from the Tasks page.</td>
+          <td colspan="6" class="py-4 px-3 text-gray-400 italic text-sm">No innovations logged yet. Log one from the Tasks page.</td>
         </tr>
         @endforelse
       </tbody>
@@ -211,6 +223,7 @@
           <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">#</th>
           <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Competency</th>
           <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center">Self Score</th>
+          <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center">Supervisor Score</th>
         </tr>
       </thead>
       <tbody>
@@ -220,6 +233,9 @@
           <td class="py-2 px-3 font-medium text-gray-700">{{ $comp->competency }}</td>
           <td class="py-2 px-3 text-center">
             <span class="bg-[#eeedfe] text-[#3C3489] font-semibold px-2 py-0.5 rounded-full text-xs">{{ $comp->staff_score ?? '—' }}</span>
+          </td>
+          <td class="py-2 px-3 text-center">
+            <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $comp->supervisor_score ?? '—' }}</span>
           </td>
         </tr>
         @endforeach

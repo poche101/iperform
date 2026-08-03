@@ -127,15 +127,34 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
         </nav>
         <div class="p-4 border-t border-[#e0daf5] bg-gray-50/50">
             @if(isset($cycle) && $cycle)
-            <div class="bg-[#faeeda] border border-amber-100 rounded-xl p-3 mb-3">
-                <div class="text-[10px] text-amber-700 font-medium uppercase tracking-wider flex items-center gap-1 mb-0.5">
-                    <i class="ti ti-clock text-xs"></i> Deadline
-                </div>
-                <div class="text-xl font-bold text-[#3C3489]">
-                    {{ max(0, now()->diffInDays(\Carbon\Carbon::parse($cycle->deadline), false)) }}d
-                </div>
-                <div class="text-[11px] text-gray-500">until {{ $cycle->name }} lock</div>
-            </div>
+           @php
+    $deadline = \Carbon\Carbon::parse($cycle->deadline);
+    $now = now();
+    $diffDays = (int) floor($now->diffInDays($deadline, false));
+    $isPast = $now->greaterThan($deadline);
+@endphp
+
+<div class="bg-[#faeeda] border border-amber-100 rounded-xl p-3 mb-3">
+    <div class="text-[10px] text-amber-700 font-medium uppercase tracking-wider flex items-center gap-1 mb-0.5">
+        <i class="ti ti-clock text-xs"></i> Due Date
+    </div>
+
+    <div class="text-xl font-bold {{ $isPast ? 'text-red-600' : 'text-[#3C3489]' }}">
+        @if ($isPast)
+            Locked
+        @elseif ($diffDays == 0)
+            Today
+        @elseif ($diffDays == 1)
+            1 day left
+        @else
+            {{ $diffDays }} days left
+        @endif
+    </div>
+
+    <div class="text-[11px] text-gray-500">
+        {{ $cycle->name }} · {{ $deadline->format('M j, Y') }} at {{ $deadline->format('g:i A') }}
+    </div>
+</div>
             @endif
             <div class="text-xs text-gray-500 min-w-0">
                 <div class="font-semibold text-gray-800 truncate">{{ auth()->user()->name }}</div>
