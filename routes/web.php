@@ -49,6 +49,7 @@ Route::middleware(['auth'])->prefix('supervisor')->name('supervisor.')->group(fu
 Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::get('/dashboard', [StaffPerformanceController::class, 'dashboard'])->name('dashboard');
     Route::get('/users', [StaffPerformanceController::class, 'users'])->name('users');
+    Route::put('/users/{user}', [StaffPerformanceController::class, 'updateUser'])->name('users.update');
     Route::post('/users', [StaffPerformanceController::class, 'storeUser'])->name('users.store');
     Route::delete('/users/{user}', [StaffPerformanceController::class, 'deleteUser'])->name('users.delete');
     Route::get('/assignments', [StaffPerformanceController::class, 'assignments'])->name('assignments');

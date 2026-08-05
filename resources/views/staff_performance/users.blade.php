@@ -53,12 +53,15 @@
         <td class="py-3 px-4 text-gray-500">{{ $u->department ?? '—' }}</td>
         <td class="py-3 px-4 text-gray-500">{{ $u->supervisor?->name ?? '—' }}</td>
         <td class="py-3 px-4">
-          @if($u->id !== auth()->id())
-          <form method="POST" action="{{ route('hr.users.delete', $u) }}" onsubmit="return confirm('Delete {{ $u->name }}?')">
-            @csrf @method('DELETE')
-            <button type="submit" class="text-xs text-red-500 hover:text-red-700 transition"><i class="ti ti-trash"></i></button>
-          </form>
-          @endif
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="document.getElementById('edit-user-modal-{{ $u->id }}').classList.remove('hidden')" class="text-xs text-[#3C3489] hover:text-[#26215C] transition"><i class="ti ti-edit"></i></button>
+            @if($u->id !== auth()->id())
+            <form method="POST" action="{{ route('hr.users.delete', $u) }}" onsubmit="return confirm('Delete {{ $u->name }}?')">
+              @csrf @method('DELETE')
+              <button type="submit" class="text-xs text-red-500 hover:text-red-700 transition"><i class="ti ti-trash"></i></button>
+            </form>
+            @endif
+          </div>
         </td>
       </tr>
       @endforeach
@@ -121,6 +124,65 @@
     </form>
   </div>
 </div>
+
+{{-- Edit user modals --}}
+@foreach($users as $u)
+<div id="edit-user-modal-{{ $u->id }}" class="hidden fixed inset-0 bg-[#3C3489]/40 flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-md">
+    <div class="text-lg font-semibold mb-1">Edit user</div>
+    <div class="text-sm text-gray-400 mb-5">Update details for {{ $u->name }}.</div>
+    <form method="POST" action="{{ route('hr.users.update', $u) }}" class="space-y-4">
+      @csrf
+      @method('PUT')
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Full name</label>
+        <input name="name" value="{{ $u->name }}" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Jane Doe" required>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Username</label>
+          <input name="username" value="{{ $u->username }}" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="jane" required>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Password</label>
+          <input type="password" name="password" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Leave blank to keep current">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Department / Title</label>
+        <input name="department" value="{{ $u->department }}" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Media Team">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Designation</label>
+        <input name="designation" value="{{ $u->designation }}" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Web Developer">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Role</label>
+          <select name="role" id="role-select-edit-{{ $u->id }}" onchange="document.getElementById('sup-field-edit-{{ $u->id }}').style.display = this.value === 'staff' ? '' : 'none';" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+            <option value="staff" {{ $u->role==='staff' ? 'selected' : '' }}>Staff</option>
+            <option value="supervisor" {{ $u->role==='supervisor' ? 'selected' : '' }}>Supervisor</option>
+            <option value="staff_performance" {{ $u->role==='staff_performance' ? 'selected' : '' }}>Staff Performance</option>
+          </select>
+        </div>
+        <div id="sup-field-edit-{{ $u->id }}" style="{{ $u->role === 'staff' ? '' : 'display:none;' }}">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Supervisor</label>
+          <select name="supervisor_id" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+            <option value="">Pick one</option>
+            @foreach($supervisors as $sup)
+            <option value="{{ $sup->id }}" {{ $u->supervisor_id == $sup->id ? 'selected' : '' }}>{{ $sup->name }}</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-3 justify-end pt-2">
+        <button type="button" onclick="document.getElementById('edit-user-modal-{{ $u->id }}').classList.add('hidden')" class="px-4 py-2 text-sm border border-[#e0daf5] rounded-lg text-gray-500 hover:bg-gray-50">Cancel</button>
+        <button type="submit" class="px-4 py-2 text-sm bg-[#3C3489] text-white rounded-lg hover:bg-[#26215C]">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+@endforeach
 
 <script>
 document.getElementById('role-select').addEventListener('change', function() {
