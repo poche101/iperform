@@ -68,6 +68,36 @@ class StaffPerformanceController extends Controller
         return back()->with('success', 'User created successfully.');
     }
 
+    public function updateUser(Request $request, User $user)
+    {
+        $request->validate([
+            'name'          => 'required|string|max:255',
+            'username'      => 'required|string|unique:users,username,' . $user->id,
+            'password'      => 'nullable|string|min:6',
+            'role'          => 'required|in:staff,supervisor,staff_performance',
+            'department'    => 'nullable|string',
+            'designation'   => 'nullable|string',
+            'supervisor_id' => 'nullable|exists:users,id',
+        ]);
+
+        $data = [
+            'name'          => $request->name,
+            'username'      => $request->username,
+            'role'          => $request->role,
+            'department'    => $request->department,
+            'designation'   => $request->designation,
+            'supervisor_id' => $request->supervisor_id,
+        ];
+
+        if ($request->filled('password')) {
+            $data['password'] = Hash::make($request->password);
+        }
+
+        $user->update($data);
+
+        return back()->with('success', 'User updated.');
+    }
+
     public function deleteUser(User $user)
     {
         abort_if($user->id === Auth::id(), 403, 'Cannot delete yourself.');
