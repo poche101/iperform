@@ -22,6 +22,23 @@
 </div>
 @endif
 
+<form method="GET" action="{{ route('hr.assignments') }}" class="mb-4 flex items-center gap-2">
+  <div class="relative flex-1 max-w-sm">
+    <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+    <input
+      type="text"
+      name="search"
+      value="{{ request('search') }}"
+      placeholder="Search by name or department..."
+      class="w-full border border-[#e0daf5] rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-[#7F77DD]"
+    >
+  </div>
+  <button type="submit" class="text-xs bg-[#3C3489] text-white px-3 py-2 rounded-lg hover:bg-[#26215C] transition">Search</button>
+  @if(request('search'))
+  <a href="{{ route('hr.assignments') }}" class="text-xs text-gray-500 px-3 py-2 rounded-lg border border-[#e0daf5] hover:bg-[#f5f0ff] transition">Clear</a>
+  @endif
+</form>
+
 <div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden">
   <table class="w-full text-sm">
     <thead>
@@ -33,7 +50,7 @@
       </tr>
     </thead>
     <tbody>
-      @foreach($allStaff as $s)
+      @forelse($allStaff as $s)
       <tr class="border-b border-[#f0edf8] last:border-0">
         <td class="py-3 px-4">
           <div class="flex items-center gap-2">
@@ -66,8 +83,18 @@
           @endif
         </td>
       </tr>
-      @endforeach
+      @empty
+      <tr>
+        <td colspan="4" class="py-6 px-4 text-center text-gray-400 text-sm">No staff members found.</td>
+      </tr>
+      @endforelse
     </tbody>
   </table>
 </div>
+
+@if($allStaff->hasPages())
+<div class="mt-4">
+  {{ $allStaff->appends(request()->query())->links() }}
+</div>
+@endif
 @endsection

@@ -24,7 +24,27 @@
 </div>
 
 <div class="bg-white border border-[#e0daf5] rounded-xl p-5">
-  <div class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Per-staff insights</div>
+  <div class="flex items-center justify-between mb-4">
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Per-staff insights</div>
+
+    <form method="GET" action="{{ route('hr.dashboard') }}" class="flex items-center gap-2">
+      <div class="relative">
+        <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+        <input
+          type="text"
+          name="search"
+          value="{{ request('search') }}"
+          placeholder="Search by name or department..."
+          class="w-64 border border-[#e0daf5] rounded-lg pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:border-[#7F77DD]"
+        >
+      </div>
+      <button type="submit" class="text-xs bg-[#3C3489] text-white px-3 py-1.5 rounded-lg hover:bg-[#26215C] transition">Search</button>
+      @if(request('search'))
+      <a href="{{ route('hr.dashboard') }}" class="text-xs text-gray-500 px-3 py-1.5 rounded-lg border border-[#e0daf5] hover:bg-[#f5f0ff] transition">Clear</a>
+      @endif
+    </form>
+  </div>
+
   <table class="w-full text-sm">
     <thead>
       <tr class="bg-[#f5f0ff]">
@@ -37,7 +57,7 @@
       </tr>
     </thead>
     <tbody>
-      @foreach($allStaff as $s)
+      @forelse($allStaff as $s)
       @php $a = $appraisals[$s->id] ?? null; @endphp
       <tr class="border-b border-[#f0edf8] hover:bg-[#faf8ff]">
         <td class="py-3 px-3">
@@ -68,8 +88,18 @@
           @endif
         </td>
       </tr>
-      @endforeach
+      @empty
+      <tr>
+        <td colspan="6" class="py-6 px-3 text-center text-gray-400 text-sm">No staff members found.</td>
+      </tr>
+      @endforelse
     </tbody>
   </table>
+
+  @if($allStaff->hasPages())
+  <div class="mt-4">
+    {{ $allStaff->appends(request()->query())->links() }}
+  </div>
+  @endif
 </div>
 @endsection
