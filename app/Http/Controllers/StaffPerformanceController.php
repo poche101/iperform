@@ -125,12 +125,30 @@ class StaffPerformanceController extends Controller
         return back()->with('success', 'User deleted.');
     }
 
-    public function assignments()
+    public function assignments(Request $request)
     {
-        $allStaff    = User::where('role', 'staff')->with('supervisor')->get();
+        // Full, unfiltered count — used for the "unassigned" banner so it
+        // reflects the whole org, not just the current page/search.
+        $unassignedCount = User::where('role', 'staff')->whereNull('supervisor_id')->count();
+
+        $search = $request->input('search');
+
+        $allStaff = User::query()
+            ->where('role', 'staff')
+            ->with('supervisor')
+            ->when($search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('department', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
+
         $supervisors = User::where('role', 'supervisor')->get();
 
-        return view('staff_performance.assignments', compact('allStaff', 'supervisors'));
+        return view('staff_performance.assignments', compact('allStaff', 'supervisors', 'unassignedCount'));
     }
 
     public function updateAssignment(Request $request, User $user)
