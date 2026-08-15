@@ -11,26 +11,45 @@ use Illuminate\Support\Facades\Hash;
 
 class StaffPerformanceController extends Controller
 {
-    public function dashboard()
+    public function dashboard(Request $request)
     {
-        $cycle    = AppraisalCycle::where('is_active', true)->first();
-        $allStaff = User::where('role', 'staff')->with('supervisor')->get();
+        $cycle = AppraisalCycle::where('is_active', true)->first();
+
+        // Full, unfiltered staff set — used ONLY for the stats cards so they
+        // always reflect org-wide numbers, not just the current search/page.
+        $allStaffFull = User::where('role', 'staff')->get();
 
         $appraisals = $cycle
             ? Appraisal::where('cycle_id', $cycle->id)->get()->keyBy('staff_id')
             : collect();
 
         $stats = [
-    'total'                  => $allStaff->count(),
-    'approved'               => $appraisals->where('status', 'approved')->count(),
-    'with_staff_performance' => $appraisals->where('status', 'staff_performance')->count(), // 👈 Fixed space to underscore
-    'submitted'              => $appraisals->where('status', 'submitted')->count(),
-    'drafting'               => $allStaff->count()
-                                - $appraisals->where('status', 'approved')->count()
-                                - $appraisals->where('status', 'staff_performance')->count() // 👈 Also fixed status name here to match 'staff_performance'
-                                - $appraisals->where('status', 'submitted')->count(),
-    'avg_score'              => $appraisals->whereNotNull('staff_performance_overall')->avg('staff_performance_overall'),
-];
+            'total'                  => $allStaffFull->count(),
+            'approved'               => $appraisals->where('status', 'approved')->count(),
+            'with_staff_performance' => $appraisals->where('status', 'staff_performance')->count(),
+            'submitted'              => $appraisals->where('status', 'submitted')->count(),
+            'drafting'               => $allStaffFull->count()
+                                        - $appraisals->where('status', 'approved')->count()
+                                        - $appraisals->where('status', 'staff_performance')->count()
+                                        - $appraisals->where('status', 'submitted')->count(),
+            'avg_score'              => $appraisals->whereNotNull('staff_performance_overall')->avg('staff_performance_overall'),
+        ];
+
+        // Paginated, searchable staff set — this is what the table displays.
+        $search = $request->input('search');
+
+        $allStaff = User::query()
+            ->where('role', 'staff')
+            ->with('supervisor')
+            ->when($search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('department', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
 
         return view('staff_performance.dashboard', compact('cycle', 'allStaff', 'appraisals', 'stats'));
     }
