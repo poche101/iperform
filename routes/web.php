@@ -6,6 +6,7 @@ use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\StaffPerformanceController; // Updated Controller Import
 use App\Http\Controllers\AppraisalController;
 use App\Http\Controllers\TaskLogController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn() => redirect()->route('login'));
@@ -17,6 +18,16 @@ Route::get('/offline', fn() => view('offline'))->name('offline');
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
+
+// Web Push subscription endpoint
+Route::post('/push/subscribe', function (Request $request) {
+    $request->user()->updatePushSubscription(
+        $request->endpoint,
+        $request->keys['p256dh'] ?? null,
+        $request->keys['auth'] ?? null
+    );
+    return response()->json(['success' => true]);
+})->middleware('auth')->name('push.subscribe');
 
 // Staff
 Route::middleware(['auth'])->prefix('staff')->name('staff.')->group(function () {

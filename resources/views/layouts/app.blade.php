@@ -277,7 +277,12 @@ sidebarBackdrop?.addEventListener('click', () => toggleMobileMenu(false));
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js')
-                .then(reg => console.log('[iPerform] SW registered:', reg.scope))
+                .then(reg => {
+                    console.log('[iPerform] SW registered:', reg.scope);
+                    @if(auth()->user()->role === 'supervisor')
+                    subscribeToPush(reg);
+                    @endif
+                })
                 .catch(err => console.log('[iPerform] SW failed:', err));
         });
     }
@@ -330,6 +335,44 @@ sidebarBackdrop?.addEventListener('click', () => toggleMobileMenu(false));
         console.log('[iPerform] App installed!');
     });
 })();
+
+@if(auth()->user()->role === 'supervisor')
+// Web Push subscription (supervisors only)
+const VAPID_PUBLIC_KEY = "{{ config('webpush.vapid.public_key') }}";
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function subscribeToPush(registration) {
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+            });
+        }
+
+        await fetch('/push/subscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': window.csrfToken,
+            },
+            body: JSON.stringify(subscription),
+        });
+    } catch (err) {
+        console.log('[iPerform] Push subscription failed:', err);
+    }
+}
+@endif
 </script>
 
 @yield('scripts')

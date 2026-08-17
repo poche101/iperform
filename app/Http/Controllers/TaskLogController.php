@@ -88,6 +88,11 @@ class TaskLogController extends Controller
         // Automatically sync to the correct appraisal section
         $this->syncToAppraisal($taskLog, $appraisal);
 
+        // Notify the assigned supervisor
+        if ($supervisor = Auth::user()->supervisor) {
+            $supervisor->notify(new \App\Notifications\TaskSubmitted($taskLog));
+        }
+
         return back()->with('success', 'Task logged successfully and synced to your Appraisal!');
     }
 

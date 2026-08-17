@@ -106,23 +106,42 @@ async function syncPendingTasks() {
     console.log('[iPerform SW] Background sync triggered');
 }
 
-// Push notifications (future enhancement placeholder)
+// Push notifications
 self.addEventListener('push', event => {
     if (!event.data) return;
-    const data = event.data.json();
+    const payload = event.data.json();
+
+    // laravel-notification-channels/webpush nests custom data under
+    // `data.data` (from ->data([...]) in the notification class)
+    const url = payload.data?.url || payload.url || '/';
+
     event.waitUntil(
-        self.registration.showNotification(data.title || 'iPerform', {
-            body: data.body || 'You have a new notification.',
-            icon: '/icons/icon-192.png',
-            badge: '/icons/icon-72.png',
-            data: { url: data.url || '/' },
+        self.registration.showNotification(payload.title || 'iPerform', {
+            body: payload.body || 'You have a new notification.',
+            icon: payload.icon || '/icons/icon-192.png',
+            badge: payload.badge || '/icons/icon-72.png',
+            tag: payload.tag || undefined,
+            data: { url },
+            requireInteraction: true, // stays visible until dismissed/clicked — won't auto-vanish after a few seconds
+            vibrate: [200, 100, 200], // vibration pattern on supported devices (mobile PWA installs)
+            renotify: !!payload.tag,  // if a tag is reused, re-alert (vibrate/sound) instead of silently replacing
         })
     );
 });
 
 self.addEventListener('notificationclick', event => {
     event.notification.close();
+    const url = event.notification.data?.url || '/';
+
     event.waitUntil(
-        clients.openWindow(event.notification.data?.url || '/')
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+            // Focus an existing tab on the same origin if one's open
+            for (const client of windowClients) {
+                if (client.url === url && 'focus' in client) {
+                    return client.focus();
+                }
+            }
+            return clients.openWindow(url);
+        })
     );
 });
