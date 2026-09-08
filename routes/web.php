@@ -35,6 +35,7 @@ Route::middleware(['auth'])->prefix('staff')->name('staff.')->group(function () 
     // Tasks
     Route::get('/tasks', [TaskLogController::class, 'staffIndex'])->name('tasks');
     Route::post('/tasks', [TaskLogController::class, 'staffStore'])->name('tasks.store');
+    Route::put('/tasks/{taskLog}', [TaskLogController::class, 'staffUpdate'])->name('tasks.update');
     Route::delete('/tasks/{taskLog}', [TaskLogController::class, 'staffDestroy'])->name('tasks.destroy');
     // Appraisal
     Route::get('/appraisal', [AppraisalController::class, 'staffShow'])->name('appraisal');

@@ -78,16 +78,19 @@ class AppraisalController extends Controller
         return view('appraisal.staff-history', compact('appraisals'));
     }
 
-    /** Staff: view any of my own appraisals by id, regardless of cycle or status (read-only once not drafting) */
+    /** Staff: view any of my own appraisals by id, regardless of cycle or status (read-only once locked) */
     public function staffShowAny(Appraisal $appraisal)
     {
         abort_unless($appraisal->staff_id === Auth::id(), 403);
         $appraisal->load(['kras','tasks','innovations','competencies','cycle']);
 
+        $editable = $appraisal->status === 'drafting'
+            || ($appraisal->status === 'submitted' && is_null($appraisal->grading_started_at));
+
         return view('appraisal.show', [
             'appraisal' => $appraisal,
             'cycle' => $appraisal->cycle,
-            'readOnly' => $appraisal->status !== 'drafting',
+            'readOnly' => !$editable,
         ]);
     }
 
@@ -211,6 +214,11 @@ class AppraisalController extends Controller
     public function supervisorSave(Request $request, Appraisal $appraisal)
     {
         $this->authorizeSupervisor($appraisal);
+
+        // First time the supervisor touches this appraisal, lock the staff out of further edits
+        if (is_null($appraisal->grading_started_at)) {
+            $appraisal->update(['grading_started_at' => now()]);
+        }
 
         // Update supervisor scores on KRAs
         foreach ($request->input('kra_scores', []) as $id => $score) {
@@ -367,7 +375,14 @@ class AppraisalController extends Controller
     {
         // Only gates writes (save/submit). Viewing a past or non-drafting appraisal
         // is always allowed via staffShowAny() regardless of cycle or status.
-        abort_unless($appraisal->staff_id === Auth::id() && $appraisal->status === 'drafting', 403);
+        //
+        // Staff can keep editing through 'drafting' AND 'submitted' — the lock only
+        // engages once the supervisor has actually started grading (grading_started_at set),
+        // or the appraisal has moved past 'submitted' entirely.
+        $editable = $appraisal->status === 'drafting'
+            || ($appraisal->status === 'submitted' && is_null($appraisal->grading_started_at));
+
+        abort_unless($appraisal->staff_id === Auth::id() && $editable, 403);
     }
 
     private function authorizeSupervisor(Appraisal $appraisal)

@@ -96,6 +96,50 @@ class TaskLogController extends Controller
         return back()->with('success', 'Task logged successfully and synced to your Appraisal!');
     }
 
+    // -------------------------------------------------------
+    // STAFF: edit an own task that hasn't been graded yet
+    // -------------------------------------------------------
+    public function staffUpdate(Request $request, TaskLog $taskLog)
+    {
+        abort_unless($taskLog->staff_id === Auth::id(), 403);
+        abort_if($taskLog->status === 'graded', 403, 'Cannot edit a task your supervisor has already graded.');
+
+        $request->validate([
+            'title'                 => 'required|string|max:255',
+            'target'                => 'nullable|string',
+            'date'                  => 'required|date',
+            'details'               => 'nullable|string',
+            'challenge_identified'  => 'nullable|string',
+            'challenge_impact'      => 'nullable|string',
+            'category'              => ['required', Rule::in([
+                'KRA',
+                'Routine',
+                'Ideas, Innovation & Outstanding Contribution',
+            ])],
+            'self_score'            => 'nullable|integer|min:0|max:10',
+            'completion_percentage' => 'nullable|integer|min:0|max:100',
+        ]);
+
+        $taskLog->update([
+            'title'                 => $request->title,
+            'target'                => $request->target,
+            'date'                  => $request->date,
+            'details'               => $request->details,
+            'challenge_identified'  => $request->challenge_identified,
+            'challenge_impact'      => $request->challenge_impact,
+            'category'              => $request->category,
+            'self_score'            => $request->self_score ?? 0,
+            'completion_percentage' => $request->completion_percentage ?? 0,
+        ]);
+
+        // Keep the linked appraisal entry (KRA/Task/Innovation) in sync with the edit
+        if ($taskLog->appraisal_id && $appraisal = Appraisal::find($taskLog->appraisal_id)) {
+            $this->syncToAppraisal($taskLog, $appraisal);
+        }
+
+        return back()->with('success', 'Task updated successfully.');
+    }
+
     private function syncToAppraisal(TaskLog $taskLog, Appraisal $appraisal)
     {
         $model = match($taskLog->category) {
@@ -117,6 +161,15 @@ class TaskLogController extends Controller
                 'completion_percentage' => $taskLog->completion_percentage,
                 'staff_score'           => $taskLog->self_score,
             ]);
+
+            // Category may have changed on edit — keep the title/target/impact fields aligned too
+            if ($model === AppraisalKra::class) {
+                $existing->update(['kra' => $taskLog->title, 'target' => $taskLog->target]);
+            } elseif ($model === AppraisalInnovation::class) {
+                $existing->update(['idea' => $taskLog->title]);
+            } else {
+                $existing->update(['task' => $taskLog->title]);
+            }
         } else {
             $sn = $model::where('appraisal_id', $appraisal->id)->max('sn') ?? 0;
 

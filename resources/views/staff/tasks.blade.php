@@ -121,7 +121,9 @@
 
 @forelse($tasks as $task)
 <div class="bg-white border border-[#e0daf5] rounded-xl p-4 mb-3">
-  <div class="flex items-start justify-between gap-3">
+
+  {{-- DISPLAY MODE --}}
+  <div id="display-{{ $task->id }}" class="flex items-start justify-between gap-3">
     <div class="flex-1 min-w-0">
       <div class="font-medium text-gray-900 text-sm mb-1.5 break-words">{{ $task->title }}</div>
       <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
@@ -198,7 +200,10 @@
     </div>
 
     @if($task->status !== 'graded')
-    <div class="flex-shrink-0">
+    <div class="flex-shrink-0 flex flex-col items-center gap-2">
+      <button type="button" onclick="toggleEditTask({{ $task->id }})" class="text-gray-300 hover:text-[#3C3489] transition p-1" aria-label="Edit task">
+        <i class="ti ti-pencil text-base"></i>
+      </button>
       <form method="POST" action="{{ route('staff.tasks.destroy', $task) }}" onsubmit="return confirm('Delete this task?')">
         @csrf @method('DELETE')
         <button type="submit" class="text-gray-300 hover:text-red-500 transition p-1" aria-label="Delete task">
@@ -208,6 +213,102 @@
     </div>
     @endif
   </div>
+
+  {{-- EDIT MODE (hidden by default, only exists for non-graded tasks) --}}
+  @if($task->status !== 'graded')
+  <div id="edit-form-{{ $task->id }}" class="hidden mt-1">
+    <form method="POST" action="{{ route('staff.tasks.update', $task) }}">
+      @csrf
+      @method('PUT')
+
+      <div class="mb-3">
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Title</label>
+        <input name="title" value="{{ $task->title }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Date</label>
+        <input type="date" name="date" value="{{ $task->date->format('Y-m-d') }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+          Target/Task <span class="text-gray-400 font-normal">(What was the expected goal?)</span>
+        </label>
+        <textarea name="target" rows="2" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] resize-none">{{ $task->target }}</textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Details</label>
+        <textarea name="details" rows="3" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] resize-none">{{ $task->details }}</textarea>
+      </div>
+
+      <div class="bg-[#fcfbfe] border border-[#e8e3f8] rounded-lg p-3 sm:p-4 mb-4">
+        <div class="text-xs font-semibold text-[#534AB7] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <i class="ti ti-alert-triangle text-sm"></i> Performance Challenges & Risk Assessment <span class="text-gray-400 font-normal lowercase">(optional)</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          <div>
+            <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Challenge Identified</label>
+            <textarea name="challenge_identified" rows="2" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] resize-none bg-white">{{ $task->challenge_identified }}</textarea>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Impact on Performance</label>
+            <textarea name="challenge_impact" rows="2" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] resize-none bg-white">{{ $task->challenge_impact }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Category</label>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          @foreach(['KRA','Routine','Ideas, Innovation & Outstanding Contribution'] as $cat)
+          <label class="block w-full">
+            <input type="radio" name="category" value="{{ $cat }}" {{ $task->category===$cat?'checked':'' }} class="sr-only peer">
+            <div class="text-center py-2 px-2.5 border border-[#e0daf5] rounded-lg text-xs sm:text-sm cursor-pointer peer-checked:bg-[#3C3489] peer-checked:text-white peer-checked:border-[#3C3489] hover:bg-[#eeedfe] transition truncate">
+              {{ $cat }}
+            </div>
+          </label>
+          @endforeach
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+            % Completion · <span id="pct-label-{{ $task->id }}">{{ $task->completion_percentage }}</span>%
+          </label>
+          <input type="range" name="completion_percentage" min="0" max="100" step="5"
+            value="{{ $task->completion_percentage }}"
+            oninput="document.getElementById('pct-label-{{ $task->id }}').textContent=this.value"
+            class="w-full h-1.5 bg-[#e0daf5] rounded-full appearance-none cursor-pointer accent-[#3C3489]">
+          <div class="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>0%</span><span>50%</span><span>100%</span></div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+            Self score · <span id="score-label-{{ $task->id }}">{{ $task->self_score }}</span>/10
+          </label>
+          <input type="range" name="self_score" min="0" max="10" step="1"
+            value="{{ $task->self_score }}"
+            oninput="document.getElementById('score-label-{{ $task->id }}').textContent=this.value"
+            class="w-full h-1.5 bg-[#e0daf5] rounded-full appearance-none cursor-pointer accent-[#3C3489]">
+          <div class="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>0</span><span>5</span><span>10</span></div>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+        <button type="submit"
+          class="inline-flex items-center justify-center gap-2 bg-[#3C3489] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#26215C] transition">
+          <i class="ti ti-check"></i> Save changes
+        </button>
+        <button type="button" onclick="toggleEditTask({{ $task->id }})"
+          class="inline-flex items-center justify-center gap-2 border border-[#e0daf5] text-gray-500 px-5 py-2.5 rounded-lg text-sm hover:bg-gray-50 transition">
+          <i class="ti ti-x"></i> Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+  @endif
 </div>
 @empty
 <div class="bg-white border border-[#e0daf5] rounded-xl p-6 sm:p-8 text-center">
@@ -215,4 +316,14 @@
   <div class="text-sm text-gray-400">No tasks logged yet. Use the form above to log your first task.</div>
 </div>
 @endforelse
+
+<script>
+function toggleEditTask(id) {
+  const display = document.getElementById('display-' + id);
+  const form = document.getElementById('edit-form-' + id);
+  const editing = !form.classList.contains('hidden');
+  form.classList.toggle('hidden', editing);
+  display.classList.toggle('hidden', !editing);
+}
+</script>
 @endsection
