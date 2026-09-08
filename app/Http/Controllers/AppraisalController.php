@@ -20,7 +20,7 @@ class AppraisalController extends Controller
         return AppraisalCycle::where('is_active', true)->firstOrFail();
     }
 
-    /** Staff: view own appraisal */
+    /** Staff: view own appraisal for the current active cycle (creates a draft if none exists yet) */
     public function staffShow()
     {
         $user = Auth::user();
@@ -49,6 +49,46 @@ class AppraisalController extends Controller
         }
 
         return view('appraisal.show', compact('appraisal', 'cycle'));
+    }
+
+    /** Staff: list all of my appraisals across every cycle, past and present */
+    public function staffHistory(Request $request)
+    {
+        $query = Appraisal::with('cycle')
+            ->where('staff_id', Auth::id());
+
+        if ($search = $request->input('search')) {
+            $query->whereHas('cycle', fn($c) => $c->where('name', 'like', "%{$search}%"));
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($from = $request->input('from')) {
+            $query->whereHas('cycle', fn($c) => $c->whereDate('deadline', '>=', $from));
+        }
+
+        if ($to = $request->input('to')) {
+            $query->whereHas('cycle', fn($c) => $c->whereDate('deadline', '<=', $to));
+        }
+
+        $appraisals = $query->orderByDesc('created_at')->paginate(10)->withQueryString();
+
+        return view('appraisal.staff-history', compact('appraisals'));
+    }
+
+    /** Staff: view any of my own appraisals by id, regardless of cycle or status (read-only once not drafting) */
+    public function staffShowAny(Appraisal $appraisal)
+    {
+        abort_unless($appraisal->staff_id === Auth::id(), 403);
+        $appraisal->load(['kras','tasks','innovations','competencies','cycle']);
+
+        return view('appraisal.show', [
+            'appraisal' => $appraisal,
+            'cycle' => $appraisal->cycle,
+            'readOnly' => $appraisal->status !== 'drafting',
+        ]);
     }
 
     /** Staff: save draft */
@@ -130,6 +170,43 @@ class AppraisalController extends Controller
         return view('appraisal.supervisor', compact('appraisal'));
     }
 
+    /** Supervisor: list all appraisals I supervise, across every cycle, past and present */
+    public function supervisorHistory(Request $request)
+    {
+        $query = Appraisal::with(['staff','cycle'])
+            ->where('supervisor_id', Auth::id());
+
+        if ($search = $request->input('search')) {
+            $query->whereHas('staff', fn($s) => $s->where('name', 'like', "%{$search}%"));
+        }
+
+        if ($department = $request->input('department')) {
+            $query->whereHas('staff', fn($s) => $s->where('department', $department));
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($from = $request->input('from')) {
+            $query->whereHas('cycle', fn($c) => $c->whereDate('deadline', '>=', $from));
+        }
+
+        if ($to = $request->input('to')) {
+            $query->whereHas('cycle', fn($c) => $c->whereDate('deadline', '<=', $to));
+        }
+
+        $appraisals = $query->orderByDesc('created_at')->paginate(10)->withQueryString();
+
+        $departments = User::where('supervisor_id', Auth::id())
+            ->whereNotNull('department')
+            ->distinct()
+            ->orderBy('department')
+            ->pluck('department');
+
+        return view('appraisal.supervisor-history', compact('appraisals', 'departments'));
+    }
+
     /** Supervisor: save grades */
     public function supervisorSave(Request $request, Appraisal $appraisal)
     {
@@ -170,13 +247,55 @@ class AppraisalController extends Controller
         $appraisal->update(['status'=>'with_staff_performance','supervisor_confirmed'=>true,'forwarded_at'=>now()]);
         return redirect()->route('supervisor.dashboard')->with('success', 'Appraisal forwarded to Staff Performance!');
     }
-/** HR (Staff Performance): show appraisal */
-public function hrShow(Appraisal $appraisal)
-{
-    abort_unless(Auth::user()->isStaffPerformance(), 403);
-    $appraisal->load(['kras','tasks','innovations','competencies','staff','supervisor','cycle']);
-    return view('appraisal.hr', compact('appraisal'));
-}
+
+    /** HR (Staff Performance): show appraisal */
+    public function hrShow(Appraisal $appraisal)
+    {
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
+        $appraisal->load(['kras','tasks','innovations','competencies','staff','supervisor','cycle']);
+        return view('appraisal.hr', compact('appraisal'));
+    }
+
+    /** HR (Staff Performance): list all appraisals across every cycle, past and present */
+    public function hrHistory(Request $request)
+    {
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
+
+        $query = Appraisal::with(['staff','supervisor','cycle']);
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('staff', fn($s) => $s->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('supervisor', fn($s) => $s->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($department = $request->input('department')) {
+            $query->whereHas('staff', fn($s) => $s->where('department', $department));
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($from = $request->input('from')) {
+            $query->whereHas('cycle', fn($c) => $c->whereDate('deadline', '>=', $from));
+        }
+
+        if ($to = $request->input('to')) {
+            $query->whereHas('cycle', fn($c) => $c->whereDate('deadline', '<=', $to));
+        }
+
+        $appraisals = $query->orderByDesc('created_at')->paginate(12)->withQueryString();
+
+        $departments = User::whereNotNull('department')
+            ->distinct()
+            ->orderBy('department')
+            ->pluck('department');
+
+        return view('appraisal.hr-history', compact('appraisals', 'departments'));
+    }
+
     /** HR (Staff Performance): auto-calculate totals */
     public function hrAutoCalculate(Appraisal $appraisal)
     {
@@ -246,6 +365,8 @@ public function hrShow(Appraisal $appraisal)
 
     private function authorizeStaff(Appraisal $appraisal)
     {
+        // Only gates writes (save/submit). Viewing a past or non-drafting appraisal
+        // is always allowed via staffShowAny() regardless of cycle or status.
         abort_unless($appraisal->staff_id === Auth::id() && $appraisal->status === 'drafting', 403);
     }
 

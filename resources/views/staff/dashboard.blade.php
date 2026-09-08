@@ -11,6 +11,9 @@
 <a href="{{ route('staff.appraisal') }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('staff.appraisal') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
   <i class="ti ti-file-description text-lg w-5"></i> Appraisal
 </a>
+<a href="{{ route('staff.appraisal.history') }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('staff.appraisal.history') || request()->routeIs('staff.appraisal.view') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
+  <i class="ti ti-history text-lg w-5"></i> History
+</a>
 @endsection
 
 @section('content')

@@ -40,6 +40,9 @@ Route::middleware(['auth'])->prefix('staff')->name('staff.')->group(function () 
     Route::get('/appraisal', [AppraisalController::class, 'staffShow'])->name('appraisal');
     Route::post('/appraisal/{appraisal}/save', [AppraisalController::class, 'staffSave'])->name('appraisal.save');
     Route::post('/appraisal/{appraisal}/submit', [AppraisalController::class, 'staffSubmit'])->name('appraisal.submit');
+    // Appraisal history (past cycles, view-only once no longer drafting)
+    Route::get('/appraisal/history', [AppraisalController::class, 'staffHistory'])->name('appraisal.history');
+    Route::get('/appraisal/{appraisal}/view', [AppraisalController::class, 'staffShowAny'])->name('appraisal.view');
 });
 
 // Supervisor
@@ -50,6 +53,8 @@ Route::middleware(['auth'])->prefix('supervisor')->name('supervisor.')->group(fu
     // Tasks
     Route::get('/tasks', [TaskLogController::class, 'supervisorIndex'])->name('tasks');
     Route::post('/tasks/{taskLog}/grade', [TaskLogController::class, 'supervisorGrade'])->name('tasks.grade');
+    // Appraisal history (all staff I supervise, across every cycle) — must come before {appraisal} below
+    Route::get('/appraisal/history', [AppraisalController::class, 'supervisorHistory'])->name('appraisal.history');
     // Appraisal
     Route::get('/appraisal/{appraisal}', [AppraisalController::class, 'supervisorShow'])->name('appraisal.show');
     Route::post('/appraisal/{appraisal}/save', [AppraisalController::class, 'supervisorSave'])->name('appraisal.save');
@@ -68,6 +73,8 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::get('/cycles', [StaffPerformanceController::class, 'cycles'])->name('cycles');
     Route::post('/cycles', [StaffPerformanceController::class, 'storeCycle'])->name('cycles.store');
     Route::get('/tasks', [TaskLogController::class, 'hrIndex'])->name('tasks');
+    // Appraisal history (every appraisal, across every cycle) — must come before {appraisal} below
+    Route::get('/appraisal/history', [AppraisalController::class, 'hrHistory'])->name('appraisal.history');
     Route::get('/appraisal/{appraisal}', [AppraisalController::class, 'hrShow'])->name('appraisal.show');
     Route::post('/appraisal/{appraisal}/auto-calculate', [AppraisalController::class, 'hrAutoCalculate'])->name('appraisal.calculate');
     Route::post('/appraisal/{appraisal}/approve', [AppraisalController::class, 'hrApprove'])->name('appraisal.approve');
