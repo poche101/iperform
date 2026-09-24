@@ -10,7 +10,12 @@
 @endsection
 
 @section('content')
-{{-- Error + validation messages (remove if your layout already renders these) --}}
+{{-- Success, error + validation messages (remove any block your layout already renders) --}}
+@if(session('success'))
+<div class="mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+  <i class="ti ti-circle-check text-lg"></i> {{ session('success') }}
+</div>
+@endif
 @if(session('error'))
 <div class="mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
   <i class="ti ti-alert-circle text-lg"></i> {{ session('error') }}
@@ -60,13 +65,13 @@
         </td>
         <td class="py-3 px-4">
           <div class="flex items-center justify-end gap-2">
-            {{-- Extend deadline --}}
+            {{-- Extend deadline (min = later of: day after current deadline, today) --}}
             <button type="button"
                     onclick="openExtendModal(this)"
                     data-action="{{ route('hr.cycles.extend', $cycle) }}"
                     data-name="{{ $cycle->name }}"
                     data-current="{{ $cycle->deadline->format('d M Y') }}"
-                    data-min="{{ $cycle->deadline->copy()->addDay()->toDateString() }}"
+                    data-min="{{ $cycle->deadline->copy()->addDay()->max(now()->startOfDay())->toDateString() }}"
                     class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[#e0daf5] rounded-lg text-[#3C3489] hover:bg-[#f5f0ff] transition">
               <i class="ti ti-calendar-plus"></i> Extend
             </button>
@@ -139,10 +144,15 @@
 <div id="extend-cycle-modal" class="hidden fixed inset-0 bg-[#3C3489]/40 flex items-center justify-center z-50 p-4">
   <div class="bg-white rounded-2xl p-6 w-full max-w-md">
     <div class="text-lg font-semibold mb-1">Extend deadline</div>
-    <div class="text-sm text-gray-400 mb-5">
+    <div class="text-sm text-gray-400 mb-3">
       <span id="extend-cycle-name" class="font-medium text-gray-600"></span> is currently due on
       <span id="extend-cycle-current" class="font-medium text-gray-600"></span>.
     </div>
+
+    <div class="mb-4 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+      Extending makes this the <strong>active cycle</strong>. Any other active cycle will be closed, and staff will see this month's timer and tasks.
+    </div>
+
     <form id="extend-cycle-form" method="POST" action="" class="space-y-4">
       @csrf
       @method('PATCH')
@@ -168,7 +178,7 @@
       Are you sure you want to delete <span id="delete-cycle-name" class="font-semibold"></span>?
     </div>
     <div id="delete-cycle-warning" class="hidden mb-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-      This will also permanently delete <span id="delete-cycle-count" class="font-semibold"></span> appraisal(s) under this cycle, including any approved ones.
+      This will also permanently delete <span id="delete-cycle-count" class="font-semibold"></span> appraisal(s) and all task logs under this cycle, including any approved ones.
     </div>
     <div class="text-sm text-gray-400 mb-5">This cannot be undone.</div>
     <form id="delete-cycle-form" method="POST" action="">

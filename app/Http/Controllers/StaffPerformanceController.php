@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Appraisal;
 use App\Models\AppraisalCycle;
+use App\Models\TaskLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -190,25 +191,40 @@ class StaffPerformanceController extends Controller
         return back()->with('success', 'Appraisal cycle created.');
     }
 
-    /** HR: extend a cycle's deadline */
+    /** HR: extend a cycle's deadline and make it the live cycle */
     public function extendCycle(Request $request, AppraisalCycle $cycle)
     {
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
+
         $current = $cycle->deadline->toDateString();
 
         $request->validate([
-            'deadline' => ['required', 'date', 'after:' . $current],
+            'deadline' => ['required', 'date', 'after:' . $current, 'after_or_equal:today'],
         ], [
-            'deadline.after' => "The new deadline must be later than the current deadline ({$current}).",
+            'deadline.after'          => "The new deadline must be later than the current deadline ({$current}).",
+            'deadline.after_or_equal' => 'The new deadline cannot be in the past.',
         ]);
 
-        $cycle->update(['deadline' => $request->deadline]);
+        DB::transaction(function () use ($request, $cycle) {
+            // Only one cycle can be active, so switch the others off
+            AppraisalCycle::where('id', '!=', $cycle->id)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
 
-        return back()->with('success', "Deadline for \"{$cycle->name}\" extended to " . $cycle->deadline->format('M j, Y') . '.');
+            $cycle->update([
+                'deadline'  => $request->deadline,
+                'is_active' => true,
+            ]);
+        });
+
+        return back()->with('success', "\"{$cycle->name}\" is now the active cycle, due " . $cycle->deadline->format('M j, Y') . '.');
     }
 
-    /** HR: delete a cycle (and all appraisals under it) */
+    /** HR: delete a cycle (and all appraisals and task logs under it) */
     public function destroyCycle(AppraisalCycle $cycle)
     {
+        abort_unless(Auth::user()->isStaffPerformance(), 403);
+
         // The active cycle is required by AppraisalController::activeCycle() (firstOrFail),
         // so deleting it would break the staff appraisal page for everyone.
         if ($cycle->is_active) {
@@ -226,9 +242,11 @@ class StaffPerformanceController extends Controller
                 $appraisal->delete();
             });
 
+            TaskLog::where('cycle_id', $cycle->id)->delete();
+
             $cycle->delete();
         });
 
-        return back()->with('success', "Cycle \"{$name}\" and its appraisals were deleted.");
+        return back()->with('success', "Cycle \"{$name}\" and its appraisals and task logs were deleted.");
     }
 }
