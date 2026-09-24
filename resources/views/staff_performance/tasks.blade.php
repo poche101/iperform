@@ -10,8 +10,34 @@
 @endsection
 
 @section('content')
-<div class="text-2xl font-bold text-gray-900 mb-1">Task logs</div>
-<div class="text-sm text-gray-500 mb-5">All staff task logs for the {{ $cycle?->name ?? '—' }} cycle.</div>
+<div class="flex items-start justify-between flex-wrap gap-3 mb-5">
+  <div>
+    <div class="text-2xl font-bold text-gray-900 mb-1">Task logs</div>
+    <div class="text-sm text-gray-500">All staff task logs for the {{ $cycle?->name ?? '—' }} cycle.</div>
+  </div>
+
+  {{-- Cycle selector: switching the active cycle never hides earlier months --}}
+  @if($cycles->count())
+  <form method="GET" action="{{ route('hr.tasks') }}" class="flex items-center gap-2">
+    <label class="text-xs font-medium text-gray-500">Cycle</label>
+    <select name="cycle" onchange="this.form.submit()"
+            class="px-3 py-2 border border-[#e0daf5] rounded-lg text-sm bg-white focus:outline-none focus:border-[#7F77DD]">
+      @foreach($cycles as $c)
+        <option value="{{ $c->id }}" {{ $cycle && $cycle->id === $c->id ? 'selected' : '' }}>
+          {{ $c->name }}{{ $c->is_active ? ' (active)' : '' }}
+        </option>
+      @endforeach
+    </select>
+  </form>
+  @endif
+</div>
+
+@if($cycle && !$cycle->is_active)
+<div class="mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+  <i class="ti ti-history text-lg"></i>
+  You are viewing {{ $cycle->name }}, which is not the active cycle. Its task logs are still here in full.
+</div>
+@endif
 
 @forelse($allStaff as $s)
 @php $staffTasks = $tasks->get($s->id, collect()); @endphp
@@ -54,7 +80,7 @@
         </td>
         <td class="py-2.5 px-4">
           <span class="text-[11px] font-medium px-2 py-0.5 rounded-full
-            {{ $task->category==='KRA'?'bg-[#eeedfe] text-[#3C3489]':($task->category==='Innovation'?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700') }}">
+            {{ $task->category==='KRA'?'bg-[#eeedfe] text-[#3C3489]':(str_contains($task->category,'Innovation')?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700') }}">
             {{ $task->category }}
           </span>
         </td>

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Appraisal;
-use App\Models\AppraisalKra;        // ← ADD
-use App\Models\AppraisalTask;       // ← ADD
+use App\Models\AppraisalKra;
+use App\Models\AppraisalTask;
 use App\Models\AppraisalInnovation;
 use App\Models\AppraisalCycle;
 use App\Models\TaskLog;
@@ -15,6 +15,27 @@ use Illuminate\Validation\Rule;
 
 class TaskLogController extends Controller
 {
+    /**
+     * Supervisor/HR pages: pick which cycle to look at.
+     * Defaults to the active cycle, or the most recent one if none is active.
+     * ?cycle=ID lets them open any past month, so switching the active cycle never hides old task logs.
+     */
+    private function resolveCycle(Request $request): array
+    {
+        $cycles   = AppraisalCycle::orderByDesc('start_date')->orderByDesc('id')->get();
+        $selected = $request->filled('cycle') ? $cycles->firstWhere('id', (int) $request->input('cycle')) : null;
+        $cycle    = $selected ?? $cycles->firstWhere('is_active', true) ?? $cycles->first();
+
+        return [$cycle, $cycles];
+    }
+
+    /** Staff only: has this task's cycle passed its deadline? Supervisors and HR are never gated by this. */
+    private function staffCycleClosed(TaskLog $taskLog): bool
+    {
+        $cycle = AppraisalCycle::find($taskLog->cycle_id);
+        return $cycle && !$cycle->isOpenForStaff();
+    }
+
     // -------------------------------------------------------
     // STAFF: view own task log page
     // -------------------------------------------------------
@@ -56,9 +77,11 @@ class TaskLogController extends Controller
         ]);
 
         $cycle = AppraisalCycle::where('is_active', true)->firstOrFail();
+
         if (!$cycle->isOpenForStaff()) {
-    return back()->with('error', "The deadline for {$cycle->name} has passed, so task logging is closed. Contact HR for an extension.");
-}
+            return back()->with('error', "The deadline for {$cycle->name} has passed, so task logging is closed. Contact HR for an extension.");
+        }
+
         // Get current appraisal for this staff + cycle
         $appraisal = Appraisal::firstOrCreate(
             [
@@ -105,6 +128,10 @@ class TaskLogController extends Controller
     {
         abort_unless($taskLog->staff_id === Auth::id(), 403);
         abort_if($taskLog->status === 'graded', 403, 'Cannot edit a task your supervisor has already graded.');
+
+        if ($this->staffCycleClosed($taskLog)) {
+            return back()->with('error', 'The deadline for this cycle has passed, so this task can no longer be changed.');
+        }
 
         $request->validate([
             'title'                 => 'required|string|max:255',
@@ -206,17 +233,22 @@ class TaskLogController extends Controller
     {
         abort_unless($taskLog->staff_id === Auth::id(), 403);
         abort_if($taskLog->status === 'graded', 403, 'Cannot delete a graded task.');
+
+        if ($this->staffCycleClosed($taskLog)) {
+            return back()->with('error', 'The deadline for this cycle has passed, so this task can no longer be deleted.');
+        }
+
         $taskLog->delete();
         return back()->with('success', 'Task deleted.');
     }
 
     // -------------------------------------------------------
-    // SUPERVISOR: view tasks awaiting review
+    // SUPERVISOR: view task logs for any cycle (defaults to the active one)
     // -------------------------------------------------------
-    public function supervisorIndex()
+    public function supervisorIndex(Request $request)
     {
-        $user  = Auth::user();
-        $cycle = AppraisalCycle::where('is_active', true)->first();
+        $user = Auth::user();
+        [$cycle, $cycles] = $this->resolveCycle($request);
 
         // Get all staff under this supervisor
         $staffIds = User::where('supervisor_id', $user->id)->pluck('id');
@@ -240,11 +272,18 @@ class TaskLogController extends Controller
                 ->get()
             : collect();
 
-        return view('supervisor.tasks', compact('user', 'cycle', 'awaiting', 'recentlyGraded'));
+        // Ungraded task counts per cycle, so the selector can flag months that still need grading
+        $pendingByCycle = TaskLog::whereIn('staff_id', $staffIds)
+            ->where('status', 'awaiting')
+            ->selectRaw('cycle_id, count(*) as total')
+            ->groupBy('cycle_id')
+            ->pluck('total', 'cycle_id');
+
+        return view('supervisor.tasks', compact('user', 'cycle', 'cycles', 'pendingByCycle', 'awaiting', 'recentlyGraded'));
     }
 
     // -------------------------------------------------------
-    // SUPERVISOR: submit feedback on a task
+    // SUPERVISOR: submit feedback on a task (any cycle, any time)
     // -------------------------------------------------------
     public function supervisorGrade(Request $request, TaskLog $taskLog)
     {
@@ -301,12 +340,12 @@ class TaskLogController extends Controller
     }
 
     // -------------------------------------------------------
-    // HR: view all task logs across all staff
+    // HR: view task logs across all staff for any cycle (defaults to the active one)
     // -------------------------------------------------------
-    public function hrIndex()
+    public function hrIndex(Request $request)
     {
         abort_unless(Auth::user()->isHR(), 403);
-        $cycle = AppraisalCycle::where('is_active', true)->first();
+        [$cycle, $cycles] = $this->resolveCycle($request);
 
         $tasks = $cycle
             ? TaskLog::with(['staff', 'reviewer'])
@@ -318,6 +357,6 @@ class TaskLogController extends Controller
 
         $allStaff = User::where('role', 'staff')->with('supervisor')->get();
 
-        return view('staff_performance.tasks', compact('cycle', 'tasks', 'allStaff'));
+        return view('staff_performance.tasks', compact('cycle', 'cycles', 'tasks', 'allStaff'));
     }
 }

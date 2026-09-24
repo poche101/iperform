@@ -17,8 +17,35 @@
 @endsection
 
 @section('content')
-<div class="text-2xl font-bold text-gray-900 mb-1">Review tasks</div>
-<div class="text-sm text-gray-500 mb-5">Grade submitted work and leave feedback your team will see immediately.</div>
+<div class="flex items-start justify-between flex-wrap gap-3 mb-5">
+  <div>
+    <div class="text-2xl font-bold text-gray-900 mb-1">Review tasks</div>
+    <div class="text-sm text-gray-500">Grade submitted work and leave feedback your team will see immediately.</div>
+  </div>
+
+  {{-- Cycle selector: switching the active cycle never hides earlier months --}}
+  @if($cycles->count())
+  <form method="GET" action="{{ route('supervisor.tasks') }}" class="flex items-center gap-2">
+    <label class="text-xs font-medium text-gray-500">Cycle</label>
+    <select name="cycle" onchange="this.form.submit()"
+            class="px-3 py-2 border border-[#e0daf5] rounded-lg text-sm bg-white focus:outline-none focus:border-[#7F77DD]">
+      @foreach($cycles as $c)
+        @php $pending = $pendingByCycle[$c->id] ?? 0; @endphp
+        <option value="{{ $c->id }}" {{ $cycle && $cycle->id === $c->id ? 'selected' : '' }}>
+          {{ $c->name }}{{ $c->is_active ? ' (active)' : '' }}{{ $pending ? " — {$pending} awaiting" : '' }}
+        </option>
+      @endforeach
+    </select>
+  </form>
+  @endif
+</div>
+
+@if($cycle && !$cycle->is_active)
+<div class="mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+  <i class="ti ti-history text-lg"></i>
+  You are viewing {{ $cycle->name }}, which is not the active cycle. You can still grade its tasks.
+</div>
+@endif
 
 {{-- Awaiting review --}}
 <div class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3 flex items-center justify-between">
@@ -38,7 +65,7 @@
       <div class="flex flex-wrap gap-2 mt-1.5">
         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Awaiting review</span>
         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full
-          {{ $task->category==='KRA'?'bg-[#eeedfe] text-[#3C3489]':($task->category==='Innovation'?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700') }}">
+          {{ $task->category==='KRA'?'bg-[#eeedfe] text-[#3C3489]':(str_contains($task->category,'Innovation')?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700') }}">
           {{ $task->category }}
         </span>
         @if($task->self_score !== null)
@@ -96,7 +123,7 @@
   </div>
   @endif
 
-  {{-- Grade form --}}
+  {{-- Grade form (back() returns to the same cycle because ?cycle= stays in the URL) --}}
   <form method="POST" action="{{ route('supervisor.tasks.grade', $task) }}" class="pl-12 border-t border-[#f0edf8] pt-3">
     @csrf
     <div class="mb-2">
