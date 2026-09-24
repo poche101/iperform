@@ -31,6 +31,12 @@ class AppraisalController extends Controller
             ->first();
 
         if (!$appraisal) {
+            // Don't create an empty draft nobody can fill in once the deadline has passed
+            if (!$cycle->isOpenForStaff()) {
+                return redirect()->route('staff.dashboard')
+                    ->with('error', "The deadline for {$cycle->name} has passed. Contact HR for an extension.");
+            }
+
             $appraisal = Appraisal::create([
                 'cycle_id' => $cycle->id,
                 'staff_id' => $user->id,
@@ -48,7 +54,11 @@ class AppraisalController extends Controller
             $appraisal->load(['kras','tasks','innovations','competencies']);
         }
 
-        return view('appraisal.show', compact('appraisal', 'cycle'));
+        return view('appraisal.show', [
+            'appraisal' => $appraisal,
+            'cycle'     => $cycle,
+            'readOnly'  => !$this->isEditableByStaff($appraisal),
+        ]);
     }
 
     /** Staff: list all of my appraisals across every cycle, past and present */
@@ -84,13 +94,10 @@ class AppraisalController extends Controller
         abort_unless($appraisal->staff_id === Auth::id(), 403);
         $appraisal->load(['kras','tasks','innovations','competencies','cycle']);
 
-        $editable = $appraisal->status === 'drafting'
-            || ($appraisal->status === 'submitted' && is_null($appraisal->grading_started_at));
-
         return view('appraisal.show', [
             'appraisal' => $appraisal,
             'cycle' => $appraisal->cycle,
-            'readOnly' => !$editable,
+            'readOnly' => !$this->isEditableByStaff($appraisal),
         ]);
     }
 
@@ -165,7 +172,7 @@ class AppraisalController extends Controller
         return redirect()->route('staff.dashboard')->with('success', 'Appraisal submitted to your supervisor!');
     }
 
-    /** Supervisor: show appraisal for grading */
+    /** Supervisor: show appraisal for grading (any cycle, any time: the deadline only locks staff) */
     public function supervisorShow(Appraisal $appraisal)
     {
         $this->authorizeSupervisor($appraisal);
@@ -256,7 +263,7 @@ class AppraisalController extends Controller
         return redirect()->route('supervisor.dashboard')->with('success', 'Appraisal forwarded to Staff Performance!');
     }
 
-    /** HR (Staff Performance): show appraisal */
+    /** HR (Staff Performance): show appraisal (any cycle, any time) */
     public function hrShow(Appraisal $appraisal)
     {
         abort_unless(Auth::user()->isStaffPerformance(), 403);
@@ -371,18 +378,26 @@ class AppraisalController extends Controller
         return $pdf->download($filename);
     }
 
-    private function authorizeStaff(Appraisal $appraisal)
+    /**
+     * Can the staff member still edit this appraisal?
+     * Requires BOTH:
+     *  - status: 'drafting', or 'submitted' before the supervisor has started grading
+     *  - the cycle's deadline (end of that day) has not passed
+     * Supervisors and HR are never gated by this.
+     */
+    private function isEditableByStaff(Appraisal $appraisal): bool
     {
-        // Only gates writes (save/submit). Viewing a past or non-drafting appraisal
-        // is always allowed via staffShowAny() regardless of cycle or status.
-        //
-        // Staff can keep editing through 'drafting' AND 'submitted' — the lock only
-        // engages once the supervisor has actually started grading (grading_started_at set),
-        // or the appraisal has moved past 'submitted' entirely.
-        $editable = $appraisal->status === 'drafting'
+        $statusOk = $appraisal->status === 'drafting'
             || ($appraisal->status === 'submitted' && is_null($appraisal->grading_started_at));
 
-        abort_unless($appraisal->staff_id === Auth::id() && $editable, 403);
+        return $statusOk && $appraisal->cycle && $appraisal->cycle->isOpenForStaff();
+    }
+
+    private function authorizeStaff(Appraisal $appraisal)
+    {
+        // Only gates staff writes (save/submit). Viewing a past or locked appraisal
+        // is always allowed via staffShowAny() regardless of cycle, status or deadline.
+        abort_unless($appraisal->staff_id === Auth::id() && $this->isEditableByStaff($appraisal), 403);
     }
 
     private function authorizeSupervisor(Appraisal $appraisal)

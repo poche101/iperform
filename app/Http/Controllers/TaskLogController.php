@@ -56,7 +56,9 @@ class TaskLogController extends Controller
         ]);
 
         $cycle = AppraisalCycle::where('is_active', true)->firstOrFail();
-
+        if (!$cycle->isOpenForStaff()) {
+    return back()->with('error', "The deadline for {$cycle->name} has passed, so task logging is closed. Contact HR for an extension.");
+}
         // Get current appraisal for this staff + cycle
         $appraisal = Appraisal::firstOrCreate(
             [
