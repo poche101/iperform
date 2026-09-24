@@ -7,6 +7,7 @@ use App\Models\AppraisalCycle;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class StaffPerformanceController extends Controller
@@ -26,11 +27,11 @@ class StaffPerformanceController extends Controller
         $stats = [
             'total'                  => $allStaffFull->count(),
             'approved'               => $appraisals->where('status', 'approved')->count(),
-            'with_staff_performance' => $appraisals->where('status', 'staff_performance')->count(),
+            'with_staff_performance' => $appraisals->where('status', 'with_staff_performance')->count(),
             'submitted'              => $appraisals->where('status', 'submitted')->count(),
             'drafting'               => $allStaffFull->count()
                                         - $appraisals->where('status', 'approved')->count()
-                                        - $appraisals->where('status', 'staff_performance')->count()
+                                        - $appraisals->where('status', 'with_staff_performance')->count()
                                         - $appraisals->where('status', 'submitted')->count(),
             'avg_score'              => $appraisals->whereNotNull('staff_performance_overall')->avg('staff_performance_overall'),
         ];
@@ -161,7 +162,9 @@ class StaffPerformanceController extends Controller
 
     public function cycles()
     {
-        $cycles = AppraisalCycle::orderByDesc('created_at')->get();
+        $cycles = AppraisalCycle::withCount('appraisals')
+            ->orderByDesc('created_at')
+            ->get();
 
         return view('staff_performance.cycles', compact('cycles'));
     }
@@ -185,5 +188,47 @@ class StaffPerformanceController extends Controller
         );
 
         return back()->with('success', 'Appraisal cycle created.');
+    }
+
+    /** HR: extend a cycle's deadline */
+    public function extendCycle(Request $request, AppraisalCycle $cycle)
+    {
+        $current = $cycle->deadline->toDateString();
+
+        $request->validate([
+            'deadline' => ['required', 'date', 'after:' . $current],
+        ], [
+            'deadline.after' => "The new deadline must be later than the current deadline ({$current}).",
+        ]);
+
+        $cycle->update(['deadline' => $request->deadline]);
+
+        return back()->with('success', "Deadline for \"{$cycle->name}\" extended to " . $cycle->deadline->format('M j, Y') . '.');
+    }
+
+    /** HR: delete a cycle (and all appraisals under it) */
+    public function destroyCycle(AppraisalCycle $cycle)
+    {
+        // The active cycle is required by AppraisalController::activeCycle() (firstOrFail),
+        // so deleting it would break the staff appraisal page for everyone.
+        if ($cycle->is_active) {
+            return back()->with('error', 'You cannot delete the active cycle. Activate another cycle first.');
+        }
+
+        $name = $cycle->name;
+
+        DB::transaction(function () use ($cycle) {
+            $cycle->appraisals()->each(function (Appraisal $appraisal) {
+                $appraisal->kras()->delete();
+                $appraisal->tasks()->delete();
+                $appraisal->innovations()->delete();
+                $appraisal->competencies()->delete();
+                $appraisal->delete();
+            });
+
+            $cycle->delete();
+        });
+
+        return back()->with('success', "Cycle \"{$name}\" and its appraisals were deleted.");
     }
 }

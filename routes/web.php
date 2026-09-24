@@ -73,6 +73,8 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::post('/assignments/{user}', [StaffPerformanceController::class, 'updateAssignment'])->name('assignments.update');
     Route::get('/cycles', [StaffPerformanceController::class, 'cycles'])->name('cycles');
     Route::post('/cycles', [StaffPerformanceController::class, 'storeCycle'])->name('cycles.store');
+    Route::patch('/cycles/{cycle}/extend', [StaffPerformanceController::class, 'extendCycle'])->name('cycles.extend');
+    Route::delete('/cycles/{cycle}', [StaffPerformanceController::class, 'destroyCycle'])->name('cycles.destroy');
     Route::get('/tasks', [TaskLogController::class, 'hrIndex'])->name('tasks');
     // Appraisal history (every appraisal, across every cycle) — must come before {appraisal} below
     Route::get('/appraisal/history', [AppraisalController::class, 'hrHistory'])->name('appraisal.history');
