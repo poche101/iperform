@@ -54,6 +54,9 @@ class AppraisalController extends Controller
             $appraisal->load(['kras','tasks','innovations','competencies']);
         }
 
+            $this->ensureCompetencies($appraisal);   // ADD THIS LINE
+
+
         return view('appraisal.show', [
             'appraisal' => $appraisal,
             'cycle'     => $cycle,
@@ -93,7 +96,7 @@ class AppraisalController extends Controller
     {
         abort_unless($appraisal->staff_id === Auth::id(), 403);
         $appraisal->load(['kras','tasks','innovations','competencies','cycle']);
-
+           $this->ensureCompetencies($appraisal);   // ADD THIS LINE
         return view('appraisal.show', [
             'appraisal' => $appraisal,
             'cycle' => $appraisal->cycle,
@@ -167,7 +170,6 @@ class AppraisalController extends Controller
     public function staffSubmit(Request $request, Appraisal $appraisal)
     {
         $this->authorizeStaff($appraisal);
-        $this->staffSave($request, $appraisal);
         $appraisal->update(['status'=>'submitted','submitted_at'=>now()]);
         return redirect()->route('staff.dashboard')->with('success', 'Appraisal submitted to your supervisor!');
     }
@@ -404,4 +406,41 @@ class AppraisalController extends Controller
     {
         abort_unless(Auth::user()->isSupervisor() && $appraisal->supervisor_id === Auth::id(), 403);
     }
+
+    /** Staff: self-score core competencies (Section 4) only — safe, never touches KRAs/Tasks/Innovations */
+public function staffSaveCompetencies(Request $request, Appraisal $appraisal)
+{
+    $this->authorizeStaff($appraisal);
+
+    $request->validate([
+        'competencies'   => 'required|array',
+        'competencies.*' => 'nullable|integer|min:0|max:10',
+    ]);
+
+    foreach ($request->input('competencies', []) as $id => $score) {
+        AppraisalCompetency::where('id', $id)
+            ->where('appraisal_id', $appraisal->id)
+            ->update(['staff_score' => $score]);
+    }
+
+    return back()->with('success', 'Competency scores saved.');
+}
+
+/** Seed the 5 standard competencies if they're missing (covers appraisals created before this feature existed) */
+private function ensureCompetencies(Appraisal $appraisal): void
+{
+    if ($appraisal->competencies()->exists()) {
+        return;
+    }
+
+    $comps = ['Communication Skills','Teamwork and Collaboration','Problem Solving Ability','Initiative and Proactiveness','Professional Conduct and Work Ethics'];
+    foreach ($comps as $i => $c) {
+        AppraisalCompetency::create([
+            'appraisal_id' => $appraisal->id,
+            'sn'           => $i + 1,
+            'competency'   => $c,
+        ]);
+    }
+    $appraisal->load('competencies');
+}
 }

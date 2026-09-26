@@ -41,6 +41,7 @@ Route::middleware(['auth'])->prefix('staff')->name('staff.')->group(function () 
     Route::get('/appraisal', [AppraisalController::class, 'staffShow'])->name('appraisal');
     Route::post('/appraisal/{appraisal}/save', [AppraisalController::class, 'staffSave'])->name('appraisal.save');
     Route::post('/appraisal/{appraisal}/submit', [AppraisalController::class, 'staffSubmit'])->name('appraisal.submit');
+    Route::post('/appraisal/{appraisal}/competencies', [AppraisalController::class, 'staffSaveCompetencies'])->name('appraisal.competencies.save');
     // Appraisal history (past cycles, view-only once no longer drafting)
     Route::get('/appraisal/history', [AppraisalController::class, 'staffHistory'])->name('appraisal.history');
     Route::get('/appraisal/{appraisal}/view', [AppraisalController::class, 'staffShowAny'])->name('appraisal.view');

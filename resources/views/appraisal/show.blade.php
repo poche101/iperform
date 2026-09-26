@@ -216,32 +216,64 @@
     <div class="font-semibold text-[#3C3489] text-sm">Section 4: Core Competencies</div>
     <span class="text-[11px] bg-[#dddafe] text-[#534AB7] px-2 py-0.5 rounded-full">15%</span>
   </div>
-  <div class="p-5 overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-[#f5f0ff]">
-          <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">#</th>
-          <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Competency</th>
-          <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center">Self Score</th>
-          <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center">Supervisor Score</th>
-        </tr>
-      </thead>
-      <tbody>
-        @foreach($appraisal->competencies as $comp)
-        <tr class="border-t border-[#f0edf8]">
-          <td class="py-2 px-3 text-gray-400">{{ $comp->sn }}</td>
-          <td class="py-2 px-3 font-medium text-gray-700">{{ $comp->competency }}</td>
-          <td class="py-2 px-3 text-center">
-            <span class="bg-[#eeedfe] text-[#3C3489] font-semibold px-2 py-0.5 rounded-full text-xs">{{ $comp->staff_score ?? '—' }}</span>
-          </td>
-          <td class="py-2 px-3 text-center">
-            <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $comp->supervisor_score ?? '—' }}</span>
-          </td>
-        </tr>
-        @endforeach
-      </tbody>
-    </table>
-  </div>
+  <form method="POST" action="{{ route('staff.appraisal.competencies.save', $appraisal) }}">
+    @csrf
+    <div class="p-5 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-[#f5f0ff]">
+            <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">#</th>
+            <th class="text-left py-2 px-3 text-[11px] text-[#534AB7] font-medium">Competency</th>
+            <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center w-32">Self Score</th>
+            <th class="py-2 px-3 text-[11px] text-[#534AB7] font-medium text-center">Supervisor Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach($appraisal->competencies as $comp)
+          <tr class="border-t border-[#f0edf8]">
+            <td class="py-2 px-3 text-gray-400">{{ $comp->sn }}</td>
+            <td class="py-2 px-3 font-medium text-gray-700">{{ $comp->competency }}</td>
+            <td class="py-2 px-3 text-center">
+              @if(!$readOnly)
+                <input type="number" name="competencies[{{ $comp->id }}]" min="0" max="10"
+                  value="{{ $comp->staff_score }}"
+                  class="w-16 text-center px-2 py-1 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+              @else
+                <span class="bg-[#eeedfe] text-[#3C3489] font-semibold px-2 py-0.5 rounded-full text-xs">{{ $comp->staff_score ?? '—' }}</span>
+              @endif
+            </td>
+            <td class="py-2 px-3 text-center">
+              <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $comp->supervisor_score ?? '—' }}</span>
+            </td>
+          </tr>
+          @endforeach
+        </tbody>
+      </table>
+    </div>
+    @if(!$readOnly)
+    <div class="px-5 pb-5">
+      <button type="submit" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#26215C] transition">
+        <i class="ti ti-check"></i> Save competency scores
+      </button>
+    </div>
+    @endif
+  </form>
 </div>
+
+{{-- SUBMIT TO SUPERVISOR --}}
+@if($appraisal->status === 'drafting' && !$readOnly)
+<div class="bg-white border border-[#e0daf5] rounded-xl p-5 mb-4">
+  <div class="font-semibold text-gray-800 text-sm mb-2">Ready to submit?</div>
+  <p class="text-xs text-gray-500 mb-4">
+    Once submitted, your supervisor can review, score, and forward this appraisal. You won't be able to add or edit KRAs, tasks, innovations, or competency scores after this — unless your supervisor sends it back for changes.
+  </p>
+  <form method="POST" action="{{ route('staff.appraisal.submit', $appraisal) }}" onsubmit="return confirm('Submit this appraisal to your supervisor? You will not be able to make further changes.')">
+    @csrf
+    <button type="submit" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#26215C] transition">
+      <i class="ti ti-send"></i> Submit appraisal to supervisor
+    </button>
+  </form>
+</div>
+@endif
 
 @endsection
