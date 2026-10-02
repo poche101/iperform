@@ -11,8 +11,24 @@ class User extends Authenticatable
     use Notifiable;
     use HasPushSubscriptions;
 
-    protected $fillable = ['name','username','email','password','role','department','designation','title','supervisor_id'];
-    protected $hidden = ['password','remember_token'];
+    protected $fillable = [
+        'name',
+        'username',
+        'email',
+        'password',
+        'role',
+        'department',
+        'designation',
+        'title',
+        'supervisor_id',
+        'is_staff',
+    ];
+
+    protected $hidden = ['password', 'remember_token'];
+
+    protected $casts = [
+        'is_staff' => 'boolean',
+    ];
 
     public function isHR() { return $this->role === 'staff_performance'; }
     public function supervisor() { return $this->belongsTo(User::class, 'supervisor_id'); }
@@ -21,6 +37,15 @@ class User extends Authenticatable
     public function isStaffPerformance() { return $this->role === 'staff_performance'; }
     public function isSupervisor() { return $this->role === 'supervisor'; }
     public function isStaff() { return $this->role === 'staff'; }
+
+    /**
+     * A supervisor who also has their own tasks and appraisal.
+     * Controlled by the is_staff flag (set by HR), not inferred from supervisor_id.
+     */
+    public function isAlsoStaff(): bool
+    {
+        return $this->isSupervisor() && (bool) $this->is_staff;
+    }
 
     public function currentAppraisal()
     {

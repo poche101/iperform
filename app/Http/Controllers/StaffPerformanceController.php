@@ -10,16 +10,78 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class StaffPerformanceController extends Controller
 {
+    /**
+     * Everyone who has their own tasks and appraisal:
+     * regular staff, plus supervisors flagged as also doing staff work.
+     */
+    private function staffQuery()
+    {
+        return User::query()->where(function ($q) {
+            $q->where('role', 'staff')
+              ->orWhere(function ($q) {
+                  $q->where('role', 'supervisor')->where('is_staff', true);
+              });
+        });
+    }
+
+    /**
+     * Returns an error message if making $newId the supervisor of $user is invalid
+     * (self-assignment, or a reporting loop), otherwise null.
+     */
+    private function supervisorChangeError(User $user, ?int $newId): ?string
+    {
+        if ($newId === null) {
+            return null;
+        }
+
+        if ($newId === $user->id) {
+            return 'A person cannot supervise themselves.';
+        }
+
+        // Walk up from the new supervisor; reaching $user means the chain would loop back
+        $seen   = [];
+        $cursor = User::find($newId);
+
+        while ($cursor && !in_array($cursor->id, $seen, true)) {
+            if ($cursor->id === $user->id) {
+                return "That would create a loop: {$cursor->name} already reports up to {$user->name}.";
+            }
+            $seen[]  = $cursor->id;
+            $cursor  = $cursor->supervisor_id ? User::find($cursor->supervisor_id) : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Keep this cycle's unfinished appraisal pointing at the person's current supervisor.
+     * Appraisal::firstOrCreate copies supervisor_id only when the appraisal is first created.
+     */
+    private function syncOpenAppraisalSupervisor(User $user): void
+    {
+        $cycle = AppraisalCycle::where('is_active', true)->first();
+
+        if (!$cycle) {
+            return;
+        }
+
+        Appraisal::where('staff_id', $user->id)
+            ->where('cycle_id', $cycle->id)
+            ->whereIn('status', ['drafting', 'submitted'])
+            ->update(['supervisor_id' => $user->supervisor_id]);
+    }
+
     public function dashboard(Request $request)
     {
         $cycle = AppraisalCycle::where('is_active', true)->first();
 
         // Full, unfiltered staff set — used ONLY for the stats cards so they
         // always reflect org-wide numbers, not just the current search/page.
-        $allStaffFull = User::where('role', 'staff')->get();
+        $allStaffFull = $this->staffQuery()->get();
 
         $appraisals = $cycle
             ? Appraisal::where('cycle_id', $cycle->id)->get()->keyBy('staff_id')
@@ -40,8 +102,7 @@ class StaffPerformanceController extends Controller
         // Paginated, searchable staff set — this is what the table displays.
         $search = $request->input('search');
 
-        $allStaff = User::query()
-            ->where('role', 'staff')
+        $allStaff = $this->staffQuery()
             ->with('supervisor')
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -74,6 +135,7 @@ class StaffPerformanceController extends Controller
             'department'    => 'nullable|string',
             'designation'   => 'nullable|string',
             'supervisor_id' => 'nullable|exists:users,id',
+            'is_staff'      => 'nullable|boolean',
         ]);
 
         User::create([
@@ -84,6 +146,8 @@ class StaffPerformanceController extends Controller
             'department'    => $request->department,
             'designation'   => $request->designation,
             'supervisor_id' => $request->supervisor_id,
+            // Only meaningful for supervisors: "also does staff work"
+            'is_staff'      => $request->role === 'supervisor' && $request->boolean('is_staff'),
         ]);
 
         return back()->with('success', 'User created successfully.');
@@ -99,7 +163,14 @@ class StaffPerformanceController extends Controller
             'department'    => 'nullable|string',
             'designation'   => 'nullable|string',
             'supervisor_id' => 'nullable|exists:users,id',
+            'is_staff'      => 'nullable|boolean',
         ]);
+
+        $newSupervisorId = $request->filled('supervisor_id') ? (int) $request->supervisor_id : null;
+
+        if ($error = $this->supervisorChangeError($user, $newSupervisorId)) {
+            return back()->withErrors(['supervisor_id' => $error])->withInput();
+        }
 
         $data = [
             'name'          => $request->name,
@@ -107,7 +178,9 @@ class StaffPerformanceController extends Controller
             'role'          => $request->role,
             'department'    => $request->department,
             'designation'   => $request->designation,
-            'supervisor_id' => $request->supervisor_id,
+            'supervisor_id' => $newSupervisorId,
+            // Moving someone away from the supervisor role clears the flag
+            'is_staff'      => $request->role === 'supervisor' && $request->boolean('is_staff'),
         ];
 
         if ($request->filled('password')) {
@@ -115,6 +188,10 @@ class StaffPerformanceController extends Controller
         }
 
         $user->update($data);
+
+        if ($user->wasChanged('supervisor_id')) {
+            $this->syncOpenAppraisalSupervisor($user);
+        }
 
         return back()->with('success', 'User updated.');
     }
@@ -131,12 +208,12 @@ class StaffPerformanceController extends Controller
     {
         // Full, unfiltered count — used for the "unassigned" banner so it
         // reflects the whole org, not just the current page/search.
-        $unassignedCount = User::where('role', 'staff')->whereNull('supervisor_id')->count();
+        $unassignedCount = $this->staffQuery()->whereNull('supervisor_id')->count();
 
         $search = $request->input('search');
 
-        $allStaff = User::query()
-            ->where('role', 'staff')
+        // Staff, plus supervisors who also do staff work (is_staff)
+        $allStaff = $this->staffQuery()
             ->with('supervisor')
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -148,17 +225,29 @@ class StaffPerformanceController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        $supervisors = User::where('role', 'supervisor')->get();
+        $supervisors = User::where('role', 'supervisor')->orderBy('name')->get();
 
         return view('staff_performance.assignments', compact('allStaff', 'supervisors', 'unassignedCount'));
     }
 
     public function updateAssignment(Request $request, User $user)
     {
-        $request->validate(['supervisor_id' => 'required|exists:users,id']);
-        $user->update(['supervisor_id' => $request->supervisor_id]);
+        $request->validate([
+            // Empty is allowed (clears the supervisor); otherwise it must be an existing supervisor
+            'supervisor_id' => ['nullable', Rule::exists('users', 'id')->where('role', 'supervisor')],
+        ]);
 
-        return back()->with('success', 'Assignment updated.');
+        $newSupervisorId = $request->filled('supervisor_id') ? (int) $request->supervisor_id : null;
+
+        if ($error = $this->supervisorChangeError($user, $newSupervisorId)) {
+            return back()->withErrors(['supervisor_id' => $error]);
+        }
+
+        $user->update(['supervisor_id' => $newSupervisorId]);
+
+        $this->syncOpenAppraisalSupervisor($user);
+
+        return back()->with('success', "{$user->name}'s supervisor updated.");
     }
 
     public function cycles()

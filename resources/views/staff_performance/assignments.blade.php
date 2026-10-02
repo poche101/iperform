@@ -12,13 +12,12 @@
 
 @section('content')
 <div class="text-2xl font-bold text-gray-900 mb-1">Staff Assignments</div>
-<div class="text-sm text-gray-500 mb-5">Reassign staff to supervisors. Changes affect the supervisor's review queue immediately.</div>
+<div class="text-sm text-gray-500 mb-5">Assign staff, and supervisors who also do staff work, to the supervisor who reviews them. Changes affect the supervisor's review queue immediately.</div>
 
-@php $unassigned = $allStaff->whereNull('supervisor_id'); @endphp
-@if($unassigned->count())
+@if(($unassignedCount ?? 0) > 0)
 <div class="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
   <i class="ti ti-alert-circle"></i>
-  <strong>{{ $unassigned->count() }} staff member(s) unassigned.</strong> Please assign a supervisor.
+  <strong>{{ $unassignedCount }} member(s) unassigned.</strong> Their tasks and appraisals have no one to review them until a supervisor is assigned.
 </div>
 @endif
 
@@ -39,14 +38,14 @@
   @endif
 </form>
 
-<div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden">
+<div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
       <tr class="bg-[#f5f0ff]">
         <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Staff Member</th>
         <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Department</th>
         <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Supervisor</th>
-        <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Action</th>
+        <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Status</th>
       </tr>
     </thead>
     <tbody>
@@ -54,11 +53,16 @@
       <tr class="border-b border-[#f0edf8] last:border-0">
         <td class="py-3 px-4">
           <div class="flex items-center gap-2">
-            <div class="w-8 h-8 bg-[#eeedfe] rounded-full flex items-center justify-center text-[11px] font-bold text-[#3C3489]">
+            <div class="w-8 h-8 bg-[#eeedfe] rounded-full flex items-center justify-center text-[11px] font-bold text-[#3C3489] flex-shrink-0">
               {{ strtoupper(substr($s->name,0,1)) }}{{ strtoupper(substr(explode(' ',$s->name)[1]??'',0,1)) }}
             </div>
             <div>
-              <div class="font-medium text-gray-900">{{ $s->name }}</div>
+              <div class="font-medium text-gray-900 flex items-center gap-1.5">
+                {{ $s->name }}
+                @if($s->isSupervisor())
+                  <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#eeedfe] text-[#3C3489]">Supervisor</span>
+                @endif
+              </div>
               <div class="text-xs text-gray-400">{{ $s->designation }}</div>
             </div>
           </div>
@@ -68,8 +72,11 @@
           <form method="POST" action="{{ route('hr.assignments.update', $s) }}" class="flex items-center gap-2">
             @csrf
             <select name="supervisor_id" class="border border-[#e0daf5] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#7F77DD]">
+              <option value="" {{ !$s->supervisor_id ? 'selected' : '' }}>— No supervisor —</option>
               @foreach($supervisors as $sup)
-              <option value="{{ $sup->id }}" {{ $s->supervisor_id == $sup->id ? 'selected' : '' }}>{{ $sup->name }}</option>
+                {{-- A person can never be their own supervisor --}}
+                @continue($sup->id === $s->id)
+                <option value="{{ $sup->id }}" {{ $s->supervisor_id == $sup->id ? 'selected' : '' }}>{{ $sup->name }}</option>
               @endforeach
             </select>
             <button type="submit" class="text-xs bg-[#3C3489] text-white px-3 py-1.5 rounded-lg hover:bg-[#26215C] transition">Update</button>

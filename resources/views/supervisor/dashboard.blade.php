@@ -2,26 +2,32 @@
 @section('title', 'Supervisor Dashboard')
 
 @section('nav')
-<a href="{{ route('supervisor.dashboard') }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('supervisor.dashboard') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
-  <i class="ti ti-home text-lg w-5"></i> Home
-</a>
-<a href="{{ route('supervisor.pipeline') }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('supervisor.pipeline') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
-  <i class="ti ti-list text-lg w-5"></i> Pipeline
-</a>
-<a href="{{ route('supervisor.supervisors') }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('supervisor.supervisors') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
-  <i class="ti ti-users text-lg w-5"></i> Supervisors
-</a>
-<a href="{{ route('supervisor.tasks') }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('supervisor.tasks') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
-  <i class="ti ti-clipboard-check text-lg w-5"></i> Tasks
-</a>
-<a href="{{ route('supervisor.appraisal.history') }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('supervisor.appraisal.history') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
-  <i class="ti ti-history text-lg w-5"></i> History
-</a>
+  @include('supervisor.partials.nav')
 @endsection
 
 @section('content')
 <div class="text-2xl font-bold text-gray-900 mb-1">Supervisor dashboard</div>
 <div class="text-sm text-gray-500 mb-5">Live pipeline for the {{ $cycle?->name ?? '—' }} cycle.</div>
+
+{{-- Supervisors who are also staff: quick way into their own work, no re-login needed --}}
+@if(auth()->user()->isAlsoStaff())
+<div class="mb-5 flex flex-wrap items-center justify-between gap-3 bg-[#faf8ff] border border-[#AFA9EC] rounded-xl px-4 py-3">
+  <div>
+    <div class="text-sm font-medium text-[#3C3489]">Your own work</div>
+    <div class="text-xs text-gray-500">Log your tasks and complete your appraisal.</div>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="{{ route('staff.tasks') }}"
+       class="inline-flex items-center gap-1.5 bg-white border border-[#AFA9EC] text-[#3C3489] px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-[#eeedfe] transition">
+      <i class="ti ti-checklist"></i> My tasks
+    </a>
+    <a href="{{ route('staff.appraisal') }}"
+       class="inline-flex items-center gap-1.5 bg-[#3C3489] text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-[#26215C] transition">
+      <i class="ti ti-file-text"></i> My appraisal
+    </a>
+  </div>
+</div>
+@endif
 
 <div class="grid grid-cols-3 gap-3 mb-5">
   <div class="bg-white border border-[#e0daf5] rounded-xl p-4">

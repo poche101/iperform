@@ -39,7 +39,7 @@
     </form>
 
     {{-- Add User Button --}}
-    <button onclick="openModal('add-user-modal')" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#26215C] transition shrink-0">
+    <button onclick="openAddModal()" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#26215C] transition shrink-0">
       <i class="ti ti-plus"></i> Add user
     </button>
   </div>
@@ -76,6 +76,9 @@
               {{ $u->role === 'staff_performance' ? 'bg-orange-100 text-orange-700' : ($u->role === 'supervisor' ? 'bg-[#eeedfe] text-[#3C3489]' : 'bg-gray-100 text-gray-600') }}">
               {{ strtoupper(str_replace('_', ' ', $u->role)) }}
             </span>
+            @if($u->role === 'supervisor' && $u->is_staff)
+              <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 ml-1">+ STAFF</span>
+            @endif
           </td>
           <td class="py-3 px-4 text-gray-500 user-dept">{{ $u->department ?? '—' }}</td>
           <td class="py-3 px-4 text-gray-500">{{ $u->supervisor?->name ?? '—' }}</td>
@@ -127,7 +130,7 @@
 
 {{-- Add User Modal --}}
 <div id="add-user-modal" class="hidden fixed inset-0 bg-[#3C3489]/40 flex items-center justify-center z-50 p-4">
-  <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
     <div class="text-lg font-semibold mb-1">Add user</div>
     <div class="text-sm text-gray-400 mb-5">Create a sign-in for a new staff, supervisor, or Staff Performance member.</div>
     <form method="POST" action="{{ route('hr.users.store') }}" class="space-y-4">
@@ -157,7 +160,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Role</label>
-          <select name="role" id="add-role-select" onchange="toggleSupervisorField('add-role-select', 'add-sup-field')" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+          <select name="role" id="add-role-select" onchange="toggleRoleFields('add')" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
             <option value="staff">Staff</option>
             <option value="supervisor">Supervisor</option>
             <option value="staff_performance">Staff Performance</option>
@@ -165,14 +168,27 @@
         </div>
         <div id="add-sup-field">
           <label class="block text-xs font-medium text-gray-500 mb-1">Supervisor</label>
-          <select name="supervisor_id" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
-            <option value="">Pick one</option>
+          <select id="add-supervisor-id" name="supervisor_id" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+            <option value="">— None —</option>
             @foreach($supervisors as $sup)
             <option value="{{ $sup->id }}">{{ $sup->name }}</option>
             @endforeach
           </select>
         </div>
       </div>
+
+      {{-- Supervisors only: they also have their own tasks and appraisal --}}
+      <div id="add-staff-field" class="hidden bg-[#faf8ff] border border-[#e0daf5] rounded-lg px-3 py-2.5">
+        <input type="hidden" name="is_staff" value="0">
+        <label class="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+          <input type="checkbox" id="add-is-staff" name="is_staff" value="1" class="mt-0.5 accent-[#3C3489]">
+          <span>
+            Also does staff work
+            <span class="block text-xs text-gray-400">They log their own tasks and appraisal, reviewed by the supervisor chosen above.</span>
+          </span>
+        </label>
+      </div>
+
       <div class="flex gap-3 justify-end pt-2">
         <button type="button" onclick="closeModal('add-user-modal')" class="px-4 py-2 text-sm border border-[#e0daf5] rounded-lg text-gray-500 hover:bg-gray-50">Cancel</button>
         <button type="submit" class="px-4 py-2 text-sm bg-[#3C3489] text-white rounded-lg hover:bg-[#26215C]">Create user</button>
@@ -183,7 +199,7 @@
 
 {{-- Single Shared Edit User Modal --}}
 <div id="edit-user-modal" class="hidden fixed inset-0 bg-[#3C3489]/40 flex items-center justify-center z-50 p-4">
-  <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
     <div class="text-lg font-semibold mb-1">Edit user</div>
     <div class="text-sm text-gray-400 mb-5">Update user account details.</div>
     <form id="edit-user-form" method="POST" action="" class="space-y-4">
@@ -214,7 +230,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Role</label>
-          <select id="edit-role-select" name="role" onchange="toggleSupervisorField('edit-role-select', 'edit-sup-field')" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+          <select id="edit-role-select" name="role" onchange="toggleRoleFields('edit')" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
             <option value="staff">Staff</option>
             <option value="supervisor">Supervisor</option>
             <option value="staff_performance">Staff Performance</option>
@@ -223,13 +239,26 @@
         <div id="edit-sup-field">
           <label class="block text-xs font-medium text-gray-500 mb-1">Supervisor</label>
           <select id="edit-supervisor-id" name="supervisor_id" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
-            <option value="">Pick one</option>
+            <option value="">— None —</option>
             @foreach($supervisors as $sup)
             <option value="{{ $sup->id }}">{{ $sup->name }}</option>
             @endforeach
           </select>
         </div>
       </div>
+
+      {{-- Supervisors only: they also have their own tasks and appraisal --}}
+      <div id="edit-staff-field" class="hidden bg-[#faf8ff] border border-[#e0daf5] rounded-lg px-3 py-2.5">
+        <input type="hidden" name="is_staff" value="0">
+        <label class="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+          <input type="checkbox" id="edit-is-staff" name="is_staff" value="1" class="mt-0.5 accent-[#3C3489]">
+          <span>
+            Also does staff work
+            <span class="block text-xs text-gray-400">They log their own tasks and appraisal, reviewed by the supervisor chosen above.</span>
+          </span>
+        </label>
+      </div>
+
       <div class="flex gap-3 justify-end pt-2">
         <button type="button" onclick="closeModal('edit-user-modal')" class="px-4 py-2 text-sm border border-[#e0daf5] rounded-lg text-gray-500 hover:bg-gray-50">Cancel</button>
         <button type="submit" class="px-4 py-2 text-sm bg-[#3C3489] text-white rounded-lg hover:bg-[#26215C]">Save changes</button>
@@ -267,10 +296,32 @@ function closeModal(id) {
   document.getElementById(id).classList.add('hidden');
 }
 
-function toggleSupervisorField(selectId, fieldId) {
-  const roleSelect = document.getElementById(selectId);
-  const supField = document.getElementById(fieldId);
-  supField.style.display = roleSelect.value === 'staff' ? 'block' : 'none';
+/**
+ * Role drives which fields show (prefix is 'add' or 'edit'):
+ *  - Staff:             supervisor dropdown
+ *  - Supervisor:        supervisor dropdown (who they report to) + "also does staff work" checkbox
+ *  - Staff Performance: neither
+ * Hidden fields are cleared so a stale value is never submitted.
+ */
+function toggleRoleFields(prefix) {
+  const role     = document.getElementById(prefix + '-role-select').value;
+  const supField = document.getElementById(prefix + '-sup-field');
+  const supSel   = document.getElementById(prefix + '-supervisor-id');
+  const stfField = document.getElementById(prefix + '-staff-field');
+  const stfBox   = document.getElementById(prefix + '-is-staff');
+
+  const showSupervisor = role === 'staff' || role === 'supervisor';
+  supField.style.display = showSupervisor ? 'block' : 'none';
+  if (!showSupervisor) supSel.value = '';
+
+  const isSupervisor = role === 'supervisor';
+  stfField.classList.toggle('hidden', !isSupervisor);
+  if (!isSupervisor) stfBox.checked = false;
+}
+
+function openAddModal() {
+  toggleRoleFields('add');
+  openModal('add-user-modal');
 }
 
 function editUser(user, routeUrl) {
@@ -280,12 +331,19 @@ function editUser(user, routeUrl) {
   document.getElementById('edit-department').value = user.department || '';
   document.getElementById('edit-designation').value = user.designation || '';
 
-  const roleSelect = document.getElementById('edit-role-select');
-  roleSelect.value = user.role;
+  document.getElementById('edit-role-select').value = user.role;
 
-  document.getElementById('edit-supervisor-id').value = user.supervisor_id || '';
+  const supSelect = document.getElementById('edit-supervisor-id');
+  supSelect.value = user.supervisor_id || '';
 
-  toggleSupervisorField('edit-role-select', 'edit-sup-field');
+  // A person cannot be their own supervisor
+  Array.from(supSelect.options).forEach(o => {
+    o.disabled = o.hidden = String(o.value) === String(user.id);
+  });
+
+  document.getElementById('edit-is-staff').checked = !!user.is_staff;
+
+  toggleRoleFields('edit');
   openModal('edit-user-modal');
 }
 

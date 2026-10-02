@@ -15,6 +15,8 @@ use Illuminate\Validation\Rule;
 
 class TaskLogController extends Controller
 {
+    private const IDEAS_CATEGORY = 'Ideas, Innovation & Outstanding Contribution';
+
     /**
      * Supervisor/HR pages: pick which cycle to look at.
      * Defaults to the active cycle, or the most recent one if none is active.
@@ -243,33 +245,27 @@ class TaskLogController extends Controller
     }
 
     // -------------------------------------------------------
-    // SUPERVISOR: view task logs for any cycle (defaults to the active one)
+    // SUPERVISOR: Tasks page = list of every staff member under this supervisor
     // -------------------------------------------------------
     public function supervisorIndex(Request $request)
     {
         $user = Auth::user();
         [$cycle, $cycles] = $this->resolveCycle($request);
 
-        // Get all staff under this supervisor
-        $staffIds = User::where('supervisor_id', $user->id)->pluck('id');
+        $team     = User::where('supervisor_id', $user->id)->orderBy('name')->get();
+        $staffIds = $team->pluck('id');
 
-        $awaiting = $cycle
-            ? TaskLog::with('staff')
-                ->whereIn('staff_id', $staffIds)
+        // Per-staff task counts for the selected cycle (total / awaiting / graded)
+        $statsByStaff = $cycle
+            ? TaskLog::whereIn('staff_id', $staffIds)
                 ->where('cycle_id', $cycle->id)
-                ->where('status', 'awaiting')
-                ->orderByDesc('date')
+                ->selectRaw("staff_id,
+                    count(*) as total,
+                    sum(case when status = 'awaiting' then 1 else 0 end) as awaiting,
+                    sum(case when status = 'graded' then 1 else 0 end) as graded")
+                ->groupBy('staff_id')
                 ->get()
-            : collect();
-
-        $recentlyGraded = $cycle
-            ? TaskLog::with('staff')
-                ->whereIn('staff_id', $staffIds)
-                ->where('cycle_id', $cycle->id)
-                ->where('status', 'graded')
-                ->orderByDesc('reviewed_at')
-                ->take(10)
-                ->get()
+                ->keyBy('staff_id')
             : collect();
 
         // Ungraded task counts per cycle, so the selector can flag months that still need grading
@@ -279,7 +275,68 @@ class TaskLogController extends Controller
             ->groupBy('cycle_id')
             ->pluck('total', 'cycle_id');
 
-        return view('supervisor.tasks', compact('user', 'cycle', 'cycles', 'pendingByCycle', 'awaiting', 'recentlyGraded'));
+        return view('supervisor.tasks', compact('user', 'cycle', 'cycles', 'team', 'statsByStaff', 'pendingByCycle'));
+    }
+
+    // -------------------------------------------------------
+    // SUPERVISOR: one staff member's log. Shows KRA / Routine / Ideas cards;
+    // ?category=kra|routine|ideas lists the tasks under that category.
+    // -------------------------------------------------------
+    public function supervisorStaff(Request $request, User $staff)
+    {
+        $user = Auth::user();
+        abort_unless($user->isSupervisor(), 403);
+        abort_unless($staff->supervisor_id === $user->id, 403);
+
+        [$cycle, $cycles] = $this->resolveCycle($request);
+
+        $tasks = $cycle
+            ? TaskLog::where('staff_id', $staff->id)
+                ->where('cycle_id', $cycle->id)
+                ->get()
+            : collect();
+
+        // Routine is the fallback bucket (same as syncToAppraisal), so an unexpected category never disappears
+        $buckets = [
+            'kra'     => $tasks->where('category', 'KRA')->values(),
+            'routine' => $tasks->whereNotIn('category', ['KRA', self::IDEAS_CATEGORY])->values(),
+            'ideas'   => $tasks->where('category', self::IDEAS_CATEGORY)->values(),
+        ];
+
+        $meta = [
+            'kra'     => ['label' => 'KRA',                            'icon' => 'ti-target',  'hint' => 'Key result area tasks'],
+            'routine' => ['label' => 'Routine',                        'icon' => 'ti-repeat',  'hint' => 'Day-to-day tasks'],
+            'ideas'   => ['label' => 'Ideas & Outstanding Innovation', 'icon' => 'ti-bulb',    'hint' => 'Ideas, innovation and outstanding contribution'],
+        ];
+
+        $sections = [];
+        foreach ($buckets as $key => $items) {
+            $sections[$key] = $meta[$key] + [
+                'total'    => $items->count(),
+                'awaiting' => $items->where('status', 'awaiting')->count(),
+                'graded'   => $items->where('status', 'graded')->count(),
+            ];
+        }
+
+        $activeKey = $request->query('category');
+        if (!array_key_exists((string) $activeKey, $sections)) {
+            $activeKey = null;
+        }
+
+        // Awaiting first, then newest
+        $activeTasks = $activeKey
+            ? $buckets[$activeKey]->sortBy([['status', 'asc'], ['date', 'desc'], ['id', 'desc']])->values()
+            : collect();
+
+        $pendingByCycle = TaskLog::where('staff_id', $staff->id)
+            ->where('status', 'awaiting')
+            ->selectRaw('cycle_id, count(*) as total')
+            ->groupBy('cycle_id')
+            ->pluck('total', 'cycle_id');
+
+        return view('supervisor.tasks_staff', compact(
+            'user', 'staff', 'cycle', 'cycles', 'sections', 'activeKey', 'activeTasks', 'pendingByCycle'
+        ));
     }
 
     // -------------------------------------------------------

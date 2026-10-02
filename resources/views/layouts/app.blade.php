@@ -122,8 +122,11 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
 <div class="flex flex-1 relative">
     {{-- Desktop Sidebar --}}
     <aside id="desktop-sidebar" class="hidden lg:flex w-56 bg-white border-r border-[#e0daf5] flex-col sticky top-14 h-[calc(100vh-56px)] flex-shrink-0">
-        <nav class="flex-1 py-3">
+        <nav class="flex-1 py-3 overflow-y-auto">
             @yield('nav')
+
+            {{-- Supervisors who are also staff: switch sides without logging out --}}
+            @include('partials.role-switch')
         </nav>
         <div class="p-4 border-t border-[#e0daf5] bg-gray-50/50">
             @if(isset($cycle) && $cycle)
@@ -181,6 +184,9 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
         </div>
         <nav class="flex-1 py-3 overflow-y-auto" onclick="toggleMobileMenu(false)">
             @yield('nav')
+
+            {{-- Supervisors who are also staff: switch sides without logging out --}}
+            @include('partials.role-switch')
         </nav>
         <div class="p-4 border-t border-[#e0daf5] bg-gray-50/50 pb-safe">
             @if(isset($cycle) && $cycle)
@@ -233,6 +239,13 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
             @endforeach
         </div>
         @endif
+
+        @if(session('error'))
+<div class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm shadow-sm max-w-4xl mx-auto">
+    <i class="ti ti-alert-circle text-lg flex-shrink-0"></i>
+    <span class="break-words">{{ session('error') }}</span>
+</div>
+@endif
 
         @yield('content')
     </main>

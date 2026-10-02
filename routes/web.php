@@ -47,13 +47,14 @@ Route::middleware(['auth'])->prefix('staff')->name('staff.')->group(function () 
     Route::get('/appraisal/{appraisal}/view', [AppraisalController::class, 'staffShowAny'])->name('appraisal.view');
 });
 
-// Supervisor
+// Supervisor group (corrected)
 Route::middleware(['auth'])->prefix('supervisor')->name('supervisor.')->group(function () {
     Route::get('/dashboard', [SupervisorController::class, 'dashboard'])->name('dashboard');
     Route::get('/pipeline', [SupervisorController::class, 'pipeline'])->name('pipeline');
     Route::get('/supervisors', [SupervisorController::class, 'supervisors'])->name('supervisors');
     // Tasks
     Route::get('/tasks', [TaskLogController::class, 'supervisorIndex'])->name('tasks');
+    Route::get('/tasks/staff/{staff}', [TaskLogController::class, 'supervisorStaff'])->name('tasks.staff');
     Route::post('/tasks/{taskLog}/grade', [TaskLogController::class, 'supervisorGrade'])->name('tasks.grade');
     // Appraisal history (all staff I supervise, across every cycle) — must come before {appraisal} below
     Route::get('/appraisal/history', [AppraisalController::class, 'supervisorHistory'])->name('appraisal.history');
