@@ -6,6 +6,8 @@ use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\StaffPerformanceController; // Updated Controller Import
 use App\Http\Controllers\AppraisalController;
 use App\Http\Controllers\TaskLogController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\Auth\ChangePasswordController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +20,26 @@ Route::get('/offline', fn() => view('offline'))->name('offline');
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
+
+// Forgot / reset password (guests, via emailed link)
+Route::middleware('guest')->group(function () {
+    Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])
+        ->middleware('throttle:5,1')
+        ->name('password.email');
+
+    // NOTE: must be named "password.reset" - Laravel's reset email links to it
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
+});
+
+// Change password from inside the app (all authenticated roles)
+Route::middleware('auth')->group(function () {
+    Route::get('/account/password', [ChangePasswordController::class, 'edit'])->name('password.change');
+    Route::put('/account/password', [ChangePasswordController::class, 'update'])
+        ->middleware('throttle:6,1')
+        ->name('password.change.update');
+});
 
 // Web Push subscription endpoint
 Route::post('/push/subscribe', function (Request $request) {

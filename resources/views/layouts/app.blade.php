@@ -125,6 +125,9 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
         <nav class="flex-1 py-3 overflow-y-auto">
             @yield('nav')
 
+            {{-- Change password (all roles) --}}
+            @include('partials.password-link')
+
             {{-- Supervisors who are also staff: switch sides without logging out --}}
             @include('partials.role-switch')
         </nav>
@@ -184,6 +187,9 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
         </div>
         <nav class="flex-1 py-3 overflow-y-auto" onclick="toggleMobileMenu(false)">
             @yield('nav')
+
+            {{-- Change password (all roles) --}}
+            @include('partials.password-link')
 
             {{-- Supervisors who are also staff: switch sides without logging out --}}
             @include('partials.role-switch')
