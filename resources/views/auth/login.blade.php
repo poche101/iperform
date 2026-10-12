@@ -29,11 +29,13 @@
       <input name="username" value="{{ old('username') }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] focus:ring-2 focus:ring-[#eeedfe]" placeholder="Enter username" autocomplete="username">
     </div>
     <div>
-      <div class="flex items-center justify-between mb-1">
-        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider">Password</label>
-        <a href="{{ route('password.request') }}" class="text-xs text-[#3C3489] hover:underline">Forgot password?</a>
+      <label for="password" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Password</label>
+      <div class="relative">
+        <input id="password" type="password" name="password" class="w-full pl-3 pr-10 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] focus:ring-2 focus:ring-[#eeedfe]" placeholder="Enter password" autocomplete="current-password">
+        <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-[#3C3489] focus:outline-none focus:text-[#3C3489]" aria-label="Show password" aria-pressed="false">
+          <i class="ti ti-eye text-lg" id="togglePasswordIcon"></i>
+        </button>
       </div>
-      <input type="password" name="password" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] focus:ring-2 focus:ring-[#eeedfe]" placeholder="Enter password" autocomplete="current-password">
     </div>
 
     @if($errors->any())
@@ -45,5 +47,22 @@
     </button>
   </form>
 </div>
+
+<script>
+  (function () {
+    const input = document.getElementById('password');
+    const btn   = document.getElementById('togglePassword');
+    const icon  = document.getElementById('togglePasswordIcon');
+
+    btn.addEventListener('click', function () {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      icon.className = show ? 'ti ti-eye-off text-lg' : 'ti ti-eye text-lg';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+      input.focus();
+    });
+  })();
+</script>
 </body>
 </html>
