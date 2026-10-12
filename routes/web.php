@@ -99,7 +99,11 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::post('/cycles', [StaffPerformanceController::class, 'storeCycle'])->name('cycles.store');
     Route::patch('/cycles/{cycle}/extend', [StaffPerformanceController::class, 'extendCycle'])->name('cycles.extend');
     Route::delete('/cycles/{cycle}', [StaffPerformanceController::class, 'destroyCycle'])->name('cycles.destroy');
+    // Task logs: supervisor list, then one supervisor's staff and their logs ("none" = staff with no supervisor)
     Route::get('/tasks', [TaskLogController::class, 'hrIndex'])->name('tasks');
+    Route::get('/tasks/supervisor/{supervisor}', [TaskLogController::class, 'hrSupervisor'])
+        ->where('supervisor', '[0-9]+|none')
+        ->name('tasks.supervisor');
     // Appraisal history (every appraisal, across every cycle) — must come before {appraisal} below
     Route::get('/appraisal/history', [AppraisalController::class, 'hrHistory'])->name('appraisal.history');
     Route::get('/appraisal/{appraisal}', [AppraisalController::class, 'hrShow'])->name('appraisal.show');

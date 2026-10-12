@@ -1,122 +1,133 @@
 @extends('layouts.app')
-@section('title', 'All Task Logs')
+@section('title', 'HR — Task Logs')
 
 @section('nav')
-@foreach([['hr.dashboard','ti-chart-bar','Staff Performance Overview'],['hr.users','ti-users','Users'],['hr.assignments','ti-arrows-exchange','Assignments'],['hr.cycles','ti-calendar','Cycles'],['hr.tasks','ti-clipboard-list','Task Logs']] as [$route,$icon,$label])
-<a href="{{ route($route) }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs($route) ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
+@foreach([['hr.dashboard','ti-chart-bar','HR Overview'],['hr.users','ti-users','Users'],['hr.assignments','ti-arrows-exchange','Assignments'],['hr.cycles','ti-calendar','Cycles'],['hr.tasks','ti-clipboard-list','Task Logs']] as [$route,$icon,$label])
+<a href="{{ route($route) }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs($route, $route.'.*') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
   <i class="ti {{ $icon }} text-lg w-5"></i> {{ $label }}
 </a>
 @endforeach
 @endsection
 
 @section('content')
-<div class="flex items-start justify-between flex-wrap gap-3 mb-5">
+
+<div class="flex items-center justify-between gap-3 flex-wrap mb-5">
   <div>
-    <div class="text-2xl font-bold text-gray-900 mb-1">Task logs</div>
-    <div class="text-sm text-gray-500">All staff task logs for the {{ $cycle?->name ?? '—' }} cycle.</div>
+    <div class="text-xl font-bold text-gray-800">Task Logs</div>
+    <div class="text-sm text-gray-500">{{ $cycle?->name ?? 'No cycle' }} · Select a supervisor to view their staff and task logs</div>
   </div>
 
-  {{-- Cycle selector: switching the active cycle never hides earlier months --}}
-  @if($cycles->count())
-  <form method="GET" action="{{ route('hr.tasks') }}" class="flex items-center gap-2">
-    <label class="text-xs font-medium text-gray-500">Cycle</label>
-    <select name="cycle" onchange="this.form.submit()"
-            class="px-3 py-2 border border-[#e0daf5] rounded-lg text-sm bg-white focus:outline-none focus:border-[#7F77DD]">
+  @if($cycles->count() > 1)
+  <form method="GET" action="{{ route('hr.tasks') }}">
+    <select name="cycle" onchange="this.form.submit()" class="border border-[#e0daf5] rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7F77DD]">
       @foreach($cycles as $c)
-        <option value="{{ $c->id }}" {{ $cycle && $cycle->id === $c->id ? 'selected' : '' }}>
-          {{ $c->name }}{{ $c->is_active ? ' (active)' : '' }}
-        </option>
+      <option value="{{ $c->id }}" @selected($cycle && $cycle->id === $c->id)>{{ $c->name }}{{ $c->is_active ? ' (active)' : '' }}</option>
       @endforeach
     </select>
   </form>
   @endif
 </div>
 
-@if($cycle && !$cycle->is_active)
-<div class="mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
-  <i class="ti ti-history text-lg"></i>
-  You are viewing {{ $cycle->name }}, which is not the active cycle. Its task logs are still here in full.
+@if(!$cycle)
+<div class="bg-white border border-[#e0daf5] rounded-xl p-8 text-center text-gray-400">
+  <i class="ti ti-calendar-off text-3xl mb-2 block"></i>
+  There is no appraisal cycle, so no task logs are available to display.
 </div>
-@endif
+@else
 
-@forelse($allStaff as $s)
-@php $staffTasks = $tasks->get($s->id, collect()); @endphp
-<div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden mb-4">
-  <div class="bg-[#f5f0ff] px-5 py-3 flex items-center gap-3">
-    <div class="w-8 h-8 bg-[#3C3489] rounded-full flex items-center justify-center text-white text-[11px] font-bold">
-      {{ strtoupper(substr($s->name,0,1)) }}{{ strtoupper(substr(explode(' ',$s->name)[1]??'',0,1)) }}
-    </div>
-    <div>
-      <div class="font-semibold text-[#3C3489] text-sm">{{ $s->name }}</div>
-      <div class="text-xs text-gray-400">{{ $s->department }} · Supervisor: {{ $s->supervisor?->name ?? '—' }}</div>
-    </div>
-    <div class="ml-auto flex gap-3 text-xs text-gray-500">
-      <span><strong>{{ $staffTasks->count() }}</strong> tasks</span>
-      <span><strong>{{ $staffTasks->where('status','graded')->count() }}</strong> graded</span>
-      @if($staffTasks->count())
-      <span><strong>{{ round($staffTasks->avg('completion_percentage')) }}%</strong> avg completion</span>
-      @endif
-    </div>
+@php
+  $allLogs       = $tasks->flatten(1);
+  $totalStaff    = $tasks->count();
+  $totalLogs     = $allLogs->count();
+  $totalAwaiting = $allLogs->where('status', 'awaiting')->count();
+  $totalGraded   = $allLogs->where('status', 'graded')->count();
+
+  // Group every staff member by supervisor (0 = none), alphabetical, "none" last
+  $groups = $allStaff
+      ->groupBy(fn ($s) => $s->supervisor_id ?? 0)
+      ->sortBy(fn ($members, $supId) => $supId == 0 ? 'zzzz' : strtolower($members->first()->supervisor?->name ?? ''));
+@endphp
+
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+  <div class="bg-white border border-[#e0daf5] rounded-xl p-4">
+    <div class="text-xs text-gray-400 mb-1">Staff with logs</div>
+    <div class="text-2xl font-bold text-[#3C3489]">{{ $totalStaff }}</div>
   </div>
-  @if($staffTasks->count())
-  <table class="w-full text-sm">
-    <thead><tr class="border-b border-[#f0edf8]">
-      <th class="text-left py-2 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Task</th>
-      <th class="text-left py-2 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Category</th>
-      <th class="text-left py-2 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Date</th>
-      <th class="text-center py-2 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">% Done</th>
-      <th class="text-center py-2 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Self</th>
-      <th class="text-center py-2 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Sup.</th>
-      <th class="text-left py-2 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Status</th>
-    </tr></thead>
-    <tbody>
-      @foreach($staffTasks as $task)
-      <tr class="border-b border-[#f0edf8] last:border-0 hover:bg-[#faf8ff]">
-        <td class="py-2.5 px-4">
-          <div class="font-medium text-gray-800 text-sm">{{ $task->title }}</div>
-          @if($task->details)
-          <div class="text-xs text-gray-400 truncate max-w-xs">{{ $task->details }}</div>
-          @endif
-        </td>
-        <td class="py-2.5 px-4">
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full
-            {{ $task->category==='KRA'?'bg-[#eeedfe] text-[#3C3489]':(str_contains($task->category,'Innovation')?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700') }}">
-            {{ $task->category }}
-          </span>
-        </td>
-        <td class="py-2.5 px-4 text-xs text-gray-500">{{ $task->date->format('d M Y') }}</td>
-        <td class="py-2.5 px-4 text-center">
-          @php $pct = $task->completion_percentage; @endphp
-          <div class="flex flex-col items-center gap-0.5">
-            <span class="text-xs font-bold {{ $pct>=80?'text-green-600':($pct>=50?'text-amber-600':'text-red-500') }}">{{ $pct }}%</span>
-            <div class="w-12 bg-gray-100 rounded-full h-1">
-              <div class="h-1 rounded-full {{ $pct>=80?'bg-green-500':($pct>=50?'bg-amber-400':'bg-red-400') }}" style="width:{{ $pct }}%"></div>
-            </div>
-          </div>
-        </td>
-        <td class="py-2.5 px-4 text-center">
-          <span class="text-xs font-semibold text-[#3C3489]">{{ $task->self_score ?? '—' }}</span>
-        </td>
-        <td class="py-2.5 px-4 text-center">
-          <span class="text-xs font-semibold text-green-700">{{ $task->supervisor_score ?? '—' }}</span>
-        </td>
-        <td class="py-2.5 px-4">
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full
-            {{ $task->status==='graded'?'bg-green-100 text-green-700':($task->status==='awaiting'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-500') }}">
-            {{ $task->getStatusLabel() }}
-          </span>
-        </td>
-      </tr>
-      @endforeach
-    </tbody>
-  </table>
-  @else
-  <div class="py-5 text-center text-sm text-gray-400 italic">No tasks logged yet.</div>
-  @endif
+  <div class="bg-white border border-[#e0daf5] rounded-xl p-4">
+    <div class="text-xs text-gray-400 mb-1">Total logs</div>
+    <div class="text-2xl font-bold text-[#3C3489]">{{ $totalLogs }}</div>
+  </div>
+  <div class="bg-white border border-[#e0daf5] rounded-xl p-4">
+    <div class="text-xs text-gray-400 mb-1">Awaiting review</div>
+    <div class="text-2xl font-bold text-amber-600">{{ $totalAwaiting }}</div>
+  </div>
+  <div class="bg-white border border-[#e0daf5] rounded-xl p-4">
+    <div class="text-xs text-gray-400 mb-1">Graded</div>
+    <div class="text-2xl font-bold text-green-600">{{ $totalGraded }}</div>
+  </div>
 </div>
+
+<div class="bg-white border border-[#e0daf5] rounded-xl p-4 mb-5 flex items-center gap-3">
+  <i class="ti ti-search text-gray-400"></i>
+  <input id="sup-search" type="text" oninput="filterSupervisors()" placeholder="Search supervisors..."
+         class="w-full text-sm text-gray-700 focus:outline-none">
+</div>
+
+<div id="sup-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+@forelse($groups as $supId => $members)
+@php
+  $supervisor = $supId == 0 ? null : $members->first()->supervisor;
+  $supName    = $supervisor?->name ?? 'No supervisor assigned';
+  $groupLogs  = $members->flatMap(fn ($m) => $tasks->get($m->id, collect()));
+  $initials   = collect(explode(' ', trim($supName)))->filter()->take(2)->map(fn ($p) => strtoupper(mb_substr($p, 0, 1)))->implode('');
+@endphp
+<a href="{{ route('hr.tasks.supervisor', ['supervisor' => $supId == 0 ? 'none' : $supId, 'cycle' => $cycle->id]) }}"
+   data-name="{{ strtolower($supName) }}"
+   class="sup-card block bg-white border border-[#e0daf5] rounded-xl p-5 hover:border-[#7F77DD] hover:shadow-sm transition">
+  <div class="flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-11 h-11 rounded-full {{ $supId == 0 ? 'bg-gray-200 text-gray-500' : 'bg-[#3C3489] text-white' }} flex items-center justify-center text-sm font-semibold shrink-0">
+        {{ $supId == 0 ? '?' : $initials }}
+      </div>
+      <div class="min-w-0">
+        <div class="font-semibold text-gray-800 text-sm truncate">{{ $supName }}</div>
+        <div class="text-xs text-gray-500 truncate">
+          {{ $supervisor ? (($supervisor->department ?? '—') . ' · ' . ($supervisor->designation ?? '—')) : 'Staff without a supervisor' }}
+        </div>
+      </div>
+    </div>
+    <i class="ti ti-chevron-right text-gray-300 text-lg"></i>
+  </div>
+  <div class="flex items-center gap-2 flex-wrap mt-4">
+    <span class="text-[11px] bg-[#dddafe] text-[#534AB7] px-2 py-0.5 rounded-full">{{ $members->count() }} {{ Str::plural('staff', $members->count()) }}</span>
+    <span class="text-[11px] bg-[#eeedfe] text-[#3C3489] px-2 py-0.5 rounded-full">{{ $groupLogs->count() }} {{ Str::plural('log', $groupLogs->count()) }}</span>
+    @if(($n = $groupLogs->where('status', 'awaiting')->count()) > 0)
+    <span class="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{{ $n }} awaiting</span>
+    @endif
+    @if(($n = $groupLogs->where('status', 'graded')->count()) > 0)
+    <span class="text-[11px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{{ $n }} graded</span>
+    @endif
+  </div>
+</a>
 @empty
-<div class="bg-white border border-[#e0daf5] rounded-xl p-8 text-center">
-  <div class="text-sm text-gray-400">No staff found.</div>
+<div class="md:col-span-2 bg-white border border-[#e0daf5] rounded-xl p-8 text-center text-gray-400">
+  <i class="ti ti-users-off text-3xl mb-2 block"></i>
+  No staff found.
 </div>
 @endforelse
+</div>
+
+@endif
+
+@endsection
+
+@section('scripts')
+<script>
+function filterSupervisors() {
+  const q = document.getElementById('sup-search').value.trim().toLowerCase();
+  document.querySelectorAll('.sup-card').forEach(card => {
+    card.style.display = card.dataset.name.includes(q) ? '' : 'none';
+  });
+}
+</script>
 @endsection

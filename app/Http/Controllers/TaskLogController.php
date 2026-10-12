@@ -399,21 +399,56 @@ class TaskLogController extends Controller
     // -------------------------------------------------------
     // HR: view task logs across all staff for any cycle (defaults to the active one)
     // -------------------------------------------------------
-    public function hrIndex(Request $request)
-    {
-        abort_unless(Auth::user()->isHR(), 403);
-        [$cycle, $cycles] = $this->resolveCycle($request);
+  public function hrIndex(Request $request)
+{
+    abort_unless(Auth::user()->isHR(), 403);
+    [$cycle, $cycles] = $this->resolveCycle($request);
 
-        $tasks = $cycle
-            ? TaskLog::with(['staff', 'reviewer'])
-                ->where('cycle_id', $cycle->id)
-                ->orderByDesc('date')
-                ->get()
-                ->groupBy('staff_id')
-            : collect();
+    $tasks = $cycle
+        ? TaskLog::where('cycle_id', $cycle->id)->get()->groupBy('staff_id')
+        : collect();
 
-        $allStaff = User::where('role', 'staff')->with('supervisor')->get();
+    // Everyone who logs tasks, with their supervisor, so supervisors with zero logs still appear
+    $allStaff = User::with('supervisor')
+        ->where(function ($q) {
+            $q->where('role', 'staff')
+              ->orWhere(fn ($q) => $q->where('role', 'supervisor')->where('is_staff', true));
+        })
+        ->orderBy('name')
+        ->get();
 
-        return view('staff_performance.tasks', compact('cycle', 'cycles', 'tasks', 'allStaff'));
-    }
+    return view('staff_performance.tasks', compact('cycle', 'cycles', 'tasks', 'allStaff'));
+}
+
+public function hrSupervisor(Request $request, string $supervisor)
+{
+    abort_unless(Auth::user()->isHR(), 403);
+    [$cycle, $cycles] = $this->resolveCycle($request);
+
+    $supervisorUser = $supervisor === 'none' ? null : User::findOrFail((int) $supervisor);
+
+    $team = User::query()
+        ->when(
+            $supervisorUser,
+            fn ($q) => $q->where('supervisor_id', $supervisorUser->id),
+            fn ($q) => $q->whereNull('supervisor_id')->where(function ($q) {
+                $q->where('role', 'staff')
+                  ->orWhere(fn ($q) => $q->where('role', 'supervisor')->where('is_staff', true));
+            })
+        )
+        ->orderBy('name')
+        ->get();
+
+    $tasks = $cycle
+        ? TaskLog::with('reviewer')
+            ->whereIn('staff_id', $team->pluck('id'))
+            ->where('cycle_id', $cycle->id)
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('staff_id')
+        : collect();
+
+    return view('staff_performance.tasks_supervisor', compact('cycle', 'cycles', 'supervisorUser', 'team', 'tasks'));
+}
 }
