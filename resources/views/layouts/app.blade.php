@@ -53,6 +53,9 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
 /* PWA install banner */
 #pwa-banner { display: none; }
 #pwa-banner.visible { display: flex; }
+/* Push notification banner */
+#push-banner { display: none; }
+#push-banner.visible { display: flex; }
 /* Safe area structures */
 .topbar {
     padding-left: max(1rem, env(safe-area-inset-left));
@@ -257,6 +260,37 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
     </main>
 </div>
 
+{{-- Push Notification Banner (all roles) --}}
+<div id="push-banner"
+     class="fixed z-[60] left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm bg-white border border-[#e0daf5] shadow-xl rounded-2xl p-4 items-start gap-3"
+     style="bottom: max(1rem, env(safe-area-inset-bottom));"
+     role="dialog" aria-live="polite" aria-label="Enable notifications">
+    <div class="w-10 h-10 bg-[#eeedfe] text-[#3C3489] rounded-full flex items-center justify-center flex-shrink-0">
+        <i class="ti ti-bell-ringing text-xl"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold text-gray-800">Turn on notifications</div>
+        <div id="push-banner-text" class="text-xs text-gray-500 mt-0.5">
+            @if(auth()->user()->role === 'supervisor')
+                Get an alert when your staff submit a task for review.
+            @else
+                Get an alert when your supervisor grades your task.
+            @endif
+        </div>
+        <div id="push-banner-error" class="hidden text-xs text-red-600 mt-1.5"></div>
+        <div class="flex items-center gap-2 mt-3">
+            <button id="push-enable-btn" type="button"
+                class="bg-[#3C3489] text-white text-xs font-medium px-3.5 py-1.5 rounded-lg hover:bg-[#26215C] transition">
+                Enable
+            </button>
+            <button id="push-later-btn" type="button"
+                class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 transition">
+                Not now
+            </button>
+        </div>
+    </div>
+</div>
+
 {{-- PWA Service Worker + Install Logic + Responsiveness Listeners --}}
 <script>
 window.csrfToken = document.querySelector('meta[name="csrf-token"]').content;
@@ -291,6 +325,152 @@ menuToggle?.addEventListener('click', () => toggleMobileMenu(true));
 menuClose?.addEventListener('click', () => toggleMobileMenu(false));
 sidebarBackdrop?.addEventListener('click', () => toggleMobileMenu(false));
 
+// ---------------------------------------------------------------
+// Web Push (all roles)
+// ---------------------------------------------------------------
+const VAPID_PUBLIC_KEY = @json(config('webpush.vapid.public_key'));
+
+const pushBanner   = document.getElementById('push-banner');
+const pushEnable   = document.getElementById('push-enable-btn');
+const pushLater    = document.getElementById('push-later-btn');
+const pushErrorBox = document.getElementById('push-banner-error');
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+function pushSupported() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function showPushBanner() {
+    pushBanner.classList.add('visible');
+}
+
+function hidePushBanner() {
+    pushBanner.classList.remove('visible');
+}
+
+function showPushError(message) {
+    pushErrorBox.textContent = message;
+    pushErrorBox.classList.remove('hidden');
+}
+
+/** Create (or reuse) the browser subscription and save it on the server. */
+async function subscribeToPush(registration) {
+    if (!VAPID_PUBLIC_KEY) {
+        throw new Error('Push is not configured on the server (missing VAPID key).');
+    }
+
+    const options = {
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    };
+
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+        subscription = await registration.pushManager.subscribe(options);
+    }
+
+    let res = await sendSubscription(subscription);
+
+    // An old subscription made with different VAPID keys can't be reused: reset it once
+    if (!res.ok && res.status >= 500) {
+        throw new Error('Server error while saving the subscription (' + res.status + ').');
+    }
+    if (!res.ok) {
+        throw new Error('Could not save the subscription (' + res.status + ').');
+    }
+
+    sessionStorage.setItem('push-synced', '1');
+}
+
+async function sendSubscription(subscription) {
+    return fetch('/push/subscribe', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': window.csrfToken,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(subscription.toJSON()),
+    });
+}
+
+/** Subscribe, recovering from a stale subscription created with an older VAPID key. */
+async function subscribeWithRecovery(registration) {
+    try {
+        await subscribeToPush(registration);
+    } catch (err) {
+        if (err && err.name === 'InvalidStateError') {
+            const old = await registration.pushManager.getSubscription();
+            if (old) await old.unsubscribe();
+            await subscribeToPush(registration);
+        } else {
+            throw err;
+        }
+    }
+}
+
+/** Decide what to do once the service worker is registered. */
+function initPush(registration) {
+    if (!pushSupported()) return;
+
+    if (Notification.permission === 'denied') return;
+
+    if (Notification.permission === 'granted') {
+        // Already allowed: keep the server in sync, once per browser session
+        if (!sessionStorage.getItem('push-synced')) {
+            subscribeWithRecovery(registration).catch(err =>
+                console.log('[iPerform] Push sync failed:', err));
+        }
+        return;
+    }
+
+    // permission === 'default': ask nicely via the banner (never auto-prompt)
+    if (!sessionStorage.getItem('push-later')) {
+        showPushBanner();
+    }
+}
+
+pushEnable?.addEventListener('click', async () => {
+    pushErrorBox.classList.add('hidden');
+    pushEnable.disabled = true;
+    pushEnable.classList.add('opacity-60');
+
+    try {
+        // Called straight from a click, so the browser will show its permission popup
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+            const registration = await navigator.serviceWorker.ready;
+            await subscribeWithRecovery(registration);
+            hidePushBanner();
+        } else if (permission === 'denied') {
+            showPushError('Notifications are blocked. Click the padlock in the address bar, set Notifications to Allow, then reload.');
+        } else {
+            hidePushBanner(); // dismissed without choosing; banner returns next session
+            sessionStorage.setItem('push-later', '1');
+        }
+    } catch (err) {
+        console.log('[iPerform] Push subscription failed:', err);
+        showPushError(err.message || 'Could not turn on notifications. Please try again.');
+    } finally {
+        pushEnable.disabled = false;
+        pushEnable.classList.remove('opacity-60');
+    }
+});
+
+pushLater?.addEventListener('click', () => {
+    sessionStorage.setItem('push-later', '1');
+    hidePushBanner();
+});
+
 (function() {
     // Register service worker
     if ('serviceWorker' in navigator) {
@@ -298,9 +478,7 @@ sidebarBackdrop?.addEventListener('click', () => toggleMobileMenu(false));
             navigator.serviceWorker.register('/sw.js')
                 .then(reg => {
                     console.log('[iPerform] SW registered:', reg.scope);
-                    @if(auth()->user()->role === 'supervisor')
-                    subscribeToPush(reg);
-                    @endif
+                    initPush(reg);
                 })
                 .catch(err => console.log('[iPerform] SW failed:', err));
         });
@@ -354,44 +532,6 @@ sidebarBackdrop?.addEventListener('click', () => toggleMobileMenu(false));
         console.log('[iPerform] App installed!');
     });
 })();
-
-@if(auth()->user()->role === 'supervisor')
-// Web Push subscription (supervisors only)
-const VAPID_PUBLIC_KEY = "{{ config('webpush.vapid.public_key') }}";
-
-function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
-}
-
-async function subscribeToPush(registration) {
-    try {
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') return;
-
-        let subscription = await registration.pushManager.getSubscription();
-        if (!subscription) {
-            subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-            });
-        }
-
-        await fetch('/push/subscribe', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': window.csrfToken,
-            },
-            body: JSON.stringify(subscription),
-        });
-    } catch (err) {
-        console.log('[iPerform] Push subscription failed:', err);
-    }
-}
-@endif
 </script>
 
 @yield('scripts')
