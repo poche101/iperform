@@ -343,32 +343,40 @@ class TaskLogController extends Controller
     // SUPERVISOR: submit feedback on a task (any cycle, any time)
     // -------------------------------------------------------
     public function supervisorGrade(Request $request, TaskLog $taskLog)
-    {
-        $user = Auth::user();
-        abort_unless($user->isSupervisor(), 403);
+{
+    $user = Auth::user();
+    abort_unless($user->isSupervisor(), 403);
 
-        $staffIds = User::where('supervisor_id', $user->id)->pluck('id');
-        abort_unless($staffIds->contains($taskLog->staff_id), 403);
+    $staffIds = User::where('supervisor_id', $user->id)->pluck('id');
+    abort_unless($staffIds->contains($taskLog->staff_id), 403);
 
-        $request->validate([
-            'supervisor_score'   => 'required|integer|min:0|max:10',
-            'supervisor_comment' => 'nullable|string|max:1000',
-        ]);
+    $request->validate([
+        'supervisor_score'   => 'required|integer|min:0|max:10',
+        'supervisor_comment' => 'nullable|string|max:1000',
+    ]);
 
-        // Update TaskLog
-        $taskLog->update([
-            'supervisor_score'   => $request->supervisor_score,
-            'supervisor_comment' => $request->supervisor_comment,
-            'reviewed_by'        => $user->id,
-            'reviewed_at'        => now(),
-            'status'             => 'graded',
-        ]);
+    // Update TaskLog
+    $taskLog->update([
+        'supervisor_score'   => $request->supervisor_score,
+        'supervisor_comment' => $request->supervisor_comment,
+        'reviewed_by'        => $user->id,
+        'reviewed_at'        => now(),
+        'status'             => 'graded',
+    ]);
 
-        // === NEW: Sync score to Appraisal section ===
-        $this->syncGradeToAppraisal($taskLog);
+    // Sync score to Appraisal section
+    $this->syncGradeToAppraisal($taskLog);
 
-        return back()->with('success', 'Feedback submitted and synced to Appraisal!');
+    // Push the staff member; a push failure must never block grading
+    try {
+        $taskLog->load(['reviewer', 'staff']);
+        $taskLog->staff?->notify(new \App\Notifications\TaskGraded($taskLog));
+    } catch (\Throwable $e) {
+        report($e);
     }
+
+    return back()->with('success', 'Feedback submitted and synced to Appraisal!');
+}
 
     /**
      * Sync supervisor score from TaskLog to the linked Appraisal entry
