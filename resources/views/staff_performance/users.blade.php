@@ -24,7 +24,7 @@
   </div>
 
   <div class="flex items-center gap-3">
-    {{-- Search Bar --}}
+    {{-- Search Bar (searches the database, so it covers rows not yet loaded) --}}
     <form method="GET" action="{{ route('hr.users') }}" class="relative min-w-[240px]">
       <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base"></i>
       <input
@@ -33,7 +33,7 @@
         name="search"
         value="{{ request('search') }}"
         placeholder="Search users..."
-        onkeyup="filterTable()"
+        autocomplete="off"
         class="w-full pl-9 pr-3 py-2 bg-white border border-[#e0daf5] rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#7F77DD] transition"
       >
     </form>
@@ -45,88 +45,79 @@
   </div>
 </div>
 
-{{-- Users Table --}}
-<div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden shadow-sm">
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm" id="users-table">
-      <thead>
-        <tr class="bg-[#f5f0ff]">
-          <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Name</th>
-          <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Username</th>
-          <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Role</th>
-          <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Department</th>
-          <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Supervisor</th>
-          <th class="py-2.5 px-4"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-[#f0edf8]">
-        @forelse($users as $u)
-        <tr class="user-row hover:bg-gray-50/50 transition">
-          <td class="py-3 px-4">
-            <div class="flex items-center gap-2">
-              <div class="w-8 h-8 bg-[#eeedfe] rounded-full flex items-center justify-center text-[11px] font-bold text-[#3C3489]">
-                {{ strtoupper(substr($u->name, 0, 1)) }}{{ strtoupper(substr(explode(' ', $u->name)[1] ?? '', 0, 1)) }}
-              </div>
-              <span class="font-medium text-gray-900 user-name">{{ $u->name }}</span>
-            </div>
-          </td>
-          <td class="py-3 px-4 text-[#534AB7] font-mono text-xs user-username">{{ $u->username }}</td>
-          <td class="py-3 px-4">
-            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full user-role
-              {{ $u->role === 'staff_performance' ? 'bg-orange-100 text-orange-700' : ($u->role === 'supervisor' ? 'bg-[#eeedfe] text-[#3C3489]' : 'bg-gray-100 text-gray-600') }}">
-              {{ strtoupper(str_replace('_', ' ', $u->role)) }}
-            </span>
-            @if($u->role === 'supervisor' && $u->is_staff)
-              <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 ml-1">+ STAFF</span>
-            @endif
-          </td>
-          <td class="py-3 px-4 text-gray-500 user-dept">{{ $u->department ?? '—' }}</td>
-          <td class="py-3 px-4 text-gray-500">{{ $u->supervisor?->name ?? '—' }}</td>
-          <td class="py-3 px-4">
-            <div class="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onclick="editUser({{ json_encode($u) }}, '{{ route('hr.users.update', $u) }}')"
-                class="text-xs text-[#3C3489] hover:text-[#26215C] p-1.5 rounded-lg hover:bg-[#eeedfe] transition"
-                title="Edit User"
-              >
-                <i class="ti ti-edit text-base"></i>
-              </button>
+@php
+  $sections = [
+    [
+      'key'      => 'supervisors',
+      'title'    => 'Supervisors',
+      'subtitle' => 'People who review staff task logs and appraisals',
+      'icon'     => 'ti-user-check',
+      'page'     => $supervisorUsers,
+      'supLabel' => 'Reports to',
+      'empty'    => 'No supervisors found.',
+    ],
+    [
+      'key'      => 'staff',
+      'title'    => 'Staff',
+      'subtitle' => 'Staff and Staff Performance accounts',
+      'icon'     => 'ti-users',
+      'page'     => $staffUsers,
+      'supLabel' => 'Supervisor',
+      'empty'    => 'No staff found.',
+    ],
+  ];
+@endphp
 
-              @if($u->id !== auth()->id())
-              <button
-                type="button"
-                onclick="openDeleteModal('{{ $u->name }}', '{{ route('hr.users.delete', $u) }}')"
-                class="text-xs text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
-                title="Delete User"
-              >
-                <i class="ti ti-trash text-base"></i>
-              </button>
-              @endif
-            </div>
-          </td>
-        </tr>
-        @empty
-        <tr id="no-records-row">
-          <td colspan="6" class="py-8 text-center text-gray-400">No users found.</td>
-        </tr>
-        @endforelse
-      </tbody>
-    </table>
+@foreach($sections as $s)
+@php
+  $page      = $s['page'];
+  $remaining = max(0, $page->total() - $page->currentPage() * $page->perPage());
+@endphp
+<div class="mb-6">
+  <div class="flex items-center justify-between mb-2">
+    <div class="flex items-center gap-2">
+      <i class="ti {{ $s['icon'] }} text-lg text-[#3C3489]"></i>
+      <h2 class="text-base font-semibold text-gray-900">{{ $s['title'] }}</h2>
+      <span class="text-[11px] bg-[#dddafe] text-[#534AB7] px-2 py-0.5 rounded-full">{{ $page->total() }}</span>
+    </div>
+    <div class="text-xs text-gray-400 hidden sm:block">{{ $s['subtitle'] }}</div>
   </div>
 
-  {{-- Pagination --}}
-  @if(method_exists($users, 'hasPages') && $users->hasPages())
-  <div class="px-4 py-3 bg-white border-t border-[#f0edf8] flex items-center justify-between text-xs text-gray-500">
-    <div>
-      Showing <span class="font-medium text-gray-700">{{ $users->firstItem() }}</span> to <span class="font-medium text-gray-700">{{ $users->lastItem() }}</span> of <span class="font-medium text-gray-700">{{ $users->total() }}</span> results
+  <div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" id="{{ $s['key'] }}-table">
+        <thead>
+          <tr class="bg-[#f5f0ff]">
+            <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Name</th>
+            <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Username</th>
+            <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Role</th>
+            <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">Department</th>
+            <th class="text-left py-2.5 px-4 text-[11px] text-[#534AB7] font-medium uppercase tracking-wide">{{ $s['supLabel'] }}</th>
+            <th class="py-2.5 px-4"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#f0edf8]">
+          @forelse($page as $u)
+            @include('staff_performance._user_rows', ['rows' => [$u]])
+          @empty
+          <tr>
+            <td colspan="6" class="py-8 text-center text-gray-400">{{ $s['empty'] }}</td>
+          </tr>
+          @endforelse
+        </tbody>
+      </table>
     </div>
-    <div>
-      {{ $users->links() }}
+
+    {{-- Load more (a real link, so it still works without JS) --}}
+    <div class="load-more-wrap px-4 py-3 border-t border-[#f0edf8] text-center {{ $page->hasMorePages() ? '' : 'hidden' }}">
+      <a href="{{ $page->nextPageUrl() }}" data-section="{{ $s['key'] }}"
+         class="load-more-link inline-flex items-center gap-1 text-sm font-medium text-[#3C3489] hover:underline">
+        <i class="ti ti-chevron-down"></i> Load more <span class="remaining text-gray-400 font-normal">({{ $remaining }} more)</span>
+      </a>
     </div>
   </div>
-  @endif
 </div>
+@endforeach
 
 {{-- Add User Modal --}}
 <div id="add-user-modal" class="hidden fixed inset-0 bg-[#3C3489]/40 flex items-center justify-center z-50 p-4">
@@ -353,14 +344,51 @@ function openDeleteModal(userName, deleteUrl) {
   openModal('delete-user-modal');
 }
 
-function filterTable() {
-  const query = document.getElementById('user-search-input').value.toLowerCase();
-  const rows = document.querySelectorAll('.user-row');
-
-  rows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    row.style.display = text.includes(query) ? '' : 'none';
+// Search: runs on the server (so it covers every user, not just loaded rows).
+// Submits shortly after typing stops, and Enter also submits.
+(function () {
+  const input = document.getElementById('user-search-input');
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => input.form.submit(), 500);
   });
-}
+  if (input.value) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+})();
+
+// "Load more": fetch the next 10 rows for that section and append them
+document.querySelectorAll('.load-more-link').forEach(link => {
+  link.addEventListener('click', async function (e) {
+    e.preventDefault();
+    const section = link.dataset.section;
+    const url = new URL(link.href, window.location.origin);
+    url.searchParams.set('section', section);
+
+    link.classList.add('opacity-50', 'pointer-events-none');
+    try {
+      const res = await fetch(url.pathname + url.search, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Request failed');
+      const data = await res.json();
+
+      document.querySelector('#' + section + '-table tbody').insertAdjacentHTML('beforeend', data.html);
+
+      if (data.next) {
+        link.href = data.next;
+        link.querySelector('.remaining').textContent = '(' + data.remaining + ' more)';
+      } else {
+        link.closest('.load-more-wrap').classList.add('hidden');
+      }
+    } catch (err) {
+      window.location.href = link.href; // fall back to a normal page load
+    } finally {
+      link.classList.remove('opacity-50', 'pointer-events-none');
+    }
+  });
+});
 </script>
 @endsection
