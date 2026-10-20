@@ -2,16 +2,20 @@
 @section('title', 'Grade Appraisal')
 
 @section('nav')
-@foreach([['supervisor.dashboard','ti-home','Home'],['supervisor.pipeline','ti-list','Pipeline']] as [$route,$icon,$label])
-<a href="{{ route($route) }}" class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs($route) ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
-  <i class="ti {{ $icon }} text-lg w-5"></i> {{ $label }}
-</a>
-@endforeach
+  @include('supervisor.partials.nav')
 @endsection
 
 @section('content')
 @php
-  $canEdit = $appraisal->status === 'submitted' && auth()->id() === $appraisal->supervisor_id;
+  $cycleClosed = $appraisal->cycle && !$appraisal->cycle->isOpenForStaff();
+
+  // The deadline only locks staff. Supervisors can grade (and forward) a submitted appraisal,
+  // and once the cycle has closed they can also grade a draft the staff member never submitted.
+  $canEdit = auth()->id() === $appraisal->supervisor_id
+      && (
+          $appraisal->status === 'submitted'
+          || ($appraisal->status === 'drafting' && $cycleClosed)
+      );
   $canEditTraining = auth()->id() === $appraisal->supervisor_id; // Sections 6, 7 & Work Confirmation always editable for the assigned supervisor
 @endphp
 
@@ -25,7 +29,7 @@
     <a href="{{ route('appraisal.pdf', $appraisal) }}" class="inline-flex items-center gap-2 bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-800 transition">
       <i class="ti ti-file-download"></i> PDF
     </a>
-    <a href="{{ route('supervisor.dashboard') }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
+    <a href="{{ route('supervisor.tasks', ['cycle' => $appraisal->cycle_id]) }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
       <i class="ti ti-arrow-left"></i> Back
     </a>
   </div>
@@ -34,7 +38,12 @@
 @if($canEdit)
 <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-5 text-sm text-amber-700 flex items-start gap-2">
   <i class="ti ti-info-circle mt-0.5"></i>
-  <div>Score each section (0–10). After reviewing and grading all sections, click <strong>Forward to HR</strong> to submit. You will not be able to edit after forwarding.</div>
+  <div>
+    Score each section (0–10). After reviewing and grading all sections, click <strong>Forward to HR</strong> to submit. You will not be able to edit after forwarding.
+    @if($appraisal->status === 'drafting')
+      <div class="mt-1 text-xs text-amber-600">The cycle deadline has passed and this appraisal was not submitted by the staff member. You can still grade it.</div>
+    @endif
+  </div>
 </div>
 @endif
 
@@ -602,9 +611,7 @@ function updateSection7Total() {
 document.addEventListener('DOMContentLoaded', updateSection7Total);
 
 function addSection6Row() {
-  const tbody = document.querySelector('table tbody');
-  // Section 6 table is the first tbody after the "Capacity Development" heading;
-  // grabbing it more precisely to avoid touching other tables.
+  // Section 6 table is the one whose inputs are named section6[...]
   const section6Table = Array.from(document.querySelectorAll('table')).find(t =>
     t.closest('div')?.previousElementSibling?.textContent?.includes('Capacity Development') ||
     t.innerHTML.includes('section6[')

@@ -245,7 +245,8 @@ class TaskLogController extends Controller
     }
 
     // -------------------------------------------------------
-    // SUPERVISOR: Tasks page = list of every staff member under this supervisor
+    // SUPERVISOR: Tasks page = list of every staff member under this supervisor.
+    // Clicking a staff member opens their appraisal for the selected cycle.
     // -------------------------------------------------------
     public function supervisorIndex(Request $request)
     {
@@ -268,6 +269,14 @@ class TaskLogController extends Controller
                 ->keyBy('staff_id')
             : collect();
 
+        // Each staff member's appraisal for the selected cycle (if one exists yet)
+        $appraisalsByStaff = $cycle
+            ? Appraisal::whereIn('staff_id', $staffIds)
+                ->where('cycle_id', $cycle->id)
+                ->get()
+                ->keyBy('staff_id')
+            : collect();
+
         // Ungraded task counts per cycle, so the selector can flag months that still need grading
         $pendingByCycle = TaskLog::whereIn('staff_id', $staffIds)
             ->where('status', 'awaiting')
@@ -275,7 +284,9 @@ class TaskLogController extends Controller
             ->groupBy('cycle_id')
             ->pluck('total', 'cycle_id');
 
-        return view('supervisor.tasks', compact('user', 'cycle', 'cycles', 'team', 'statsByStaff', 'pendingByCycle'));
+        return view('supervisor.tasks', compact(
+            'user', 'cycle', 'cycles', 'team', 'statsByStaff', 'appraisalsByStaff', 'pendingByCycle'
+        ));
     }
 
     // -------------------------------------------------------
@@ -343,40 +354,40 @@ class TaskLogController extends Controller
     // SUPERVISOR: submit feedback on a task (any cycle, any time)
     // -------------------------------------------------------
     public function supervisorGrade(Request $request, TaskLog $taskLog)
-{
-    $user = Auth::user();
-    abort_unless($user->isSupervisor(), 403);
+    {
+        $user = Auth::user();
+        abort_unless($user->isSupervisor(), 403);
 
-    $staffIds = User::where('supervisor_id', $user->id)->pluck('id');
-    abort_unless($staffIds->contains($taskLog->staff_id), 403);
+        $staffIds = User::where('supervisor_id', $user->id)->pluck('id');
+        abort_unless($staffIds->contains($taskLog->staff_id), 403);
 
-    $request->validate([
-        'supervisor_score'   => 'required|integer|min:0|max:10',
-        'supervisor_comment' => 'nullable|string|max:1000',
-    ]);
+        $request->validate([
+            'supervisor_score'   => 'required|integer|min:0|max:10',
+            'supervisor_comment' => 'nullable|string|max:1000',
+        ]);
 
-    // Update TaskLog
-    $taskLog->update([
-        'supervisor_score'   => $request->supervisor_score,
-        'supervisor_comment' => $request->supervisor_comment,
-        'reviewed_by'        => $user->id,
-        'reviewed_at'        => now(),
-        'status'             => 'graded',
-    ]);
+        // Update TaskLog
+        $taskLog->update([
+            'supervisor_score'   => $request->supervisor_score,
+            'supervisor_comment' => $request->supervisor_comment,
+            'reviewed_by'        => $user->id,
+            'reviewed_at'        => now(),
+            'status'             => 'graded',
+        ]);
 
-    // Sync score to Appraisal section
-    $this->syncGradeToAppraisal($taskLog);
+        // Sync score to Appraisal section
+        $this->syncGradeToAppraisal($taskLog);
 
-    // Push the staff member; a push failure must never block grading
-    try {
-        $taskLog->load(['reviewer', 'staff']);
-        $taskLog->staff?->notify(new \App\Notifications\TaskGraded($taskLog));
-    } catch (\Throwable $e) {
-        report($e);
+        // Push the staff member; a push failure must never block grading
+        try {
+            $taskLog->load(['reviewer', 'staff']);
+            $taskLog->staff?->notify(new \App\Notifications\TaskGraded($taskLog));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return back()->with('success', 'Feedback submitted and synced to Appraisal!');
     }
-
-    return back()->with('success', 'Feedback submitted and synced to Appraisal!');
-}
 
     /**
      * Sync supervisor score from TaskLog to the linked Appraisal entry
@@ -407,56 +418,56 @@ class TaskLogController extends Controller
     // -------------------------------------------------------
     // HR: view task logs across all staff for any cycle (defaults to the active one)
     // -------------------------------------------------------
-  public function hrIndex(Request $request)
-{
-    abort_unless(Auth::user()->isHR(), 403);
-    [$cycle, $cycles] = $this->resolveCycle($request);
+    public function hrIndex(Request $request)
+    {
+        abort_unless(Auth::user()->isHR(), 403);
+        [$cycle, $cycles] = $this->resolveCycle($request);
 
-    $tasks = $cycle
-        ? TaskLog::where('cycle_id', $cycle->id)->get()->groupBy('staff_id')
-        : collect();
+        $tasks = $cycle
+            ? TaskLog::where('cycle_id', $cycle->id)->get()->groupBy('staff_id')
+            : collect();
 
-    // Everyone who logs tasks, with their supervisor, so supervisors with zero logs still appear
-    $allStaff = User::with('supervisor')
-        ->where(function ($q) {
-            $q->where('role', 'staff')
-              ->orWhere(fn ($q) => $q->where('role', 'supervisor')->where('is_staff', true));
-        })
-        ->orderBy('name')
-        ->get();
-
-    return view('staff_performance.tasks', compact('cycle', 'cycles', 'tasks', 'allStaff'));
-}
-
-public function hrSupervisor(Request $request, string $supervisor)
-{
-    abort_unless(Auth::user()->isHR(), 403);
-    [$cycle, $cycles] = $this->resolveCycle($request);
-
-    $supervisorUser = $supervisor === 'none' ? null : User::findOrFail((int) $supervisor);
-
-    $team = User::query()
-        ->when(
-            $supervisorUser,
-            fn ($q) => $q->where('supervisor_id', $supervisorUser->id),
-            fn ($q) => $q->whereNull('supervisor_id')->where(function ($q) {
+        // Everyone who logs tasks, with their supervisor, so supervisors with zero logs still appear
+        $allStaff = User::with('supervisor')
+            ->where(function ($q) {
                 $q->where('role', 'staff')
                   ->orWhere(fn ($q) => $q->where('role', 'supervisor')->where('is_staff', true));
             })
-        )
-        ->orderBy('name')
-        ->get();
+            ->orderBy('name')
+            ->get();
 
-    $tasks = $cycle
-        ? TaskLog::with('reviewer')
-            ->whereIn('staff_id', $team->pluck('id'))
-            ->where('cycle_id', $cycle->id)
-            ->orderByDesc('date')
-            ->orderByDesc('id')
-            ->get()
-            ->groupBy('staff_id')
-        : collect();
+        return view('staff_performance.tasks', compact('cycle', 'cycles', 'tasks', 'allStaff'));
+    }
 
-    return view('staff_performance.tasks_supervisor', compact('cycle', 'cycles', 'supervisorUser', 'team', 'tasks'));
-}
+    public function hrSupervisor(Request $request, string $supervisor)
+    {
+        abort_unless(Auth::user()->isHR(), 403);
+        [$cycle, $cycles] = $this->resolveCycle($request);
+
+        $supervisorUser = $supervisor === 'none' ? null : User::findOrFail((int) $supervisor);
+
+        $team = User::query()
+            ->when(
+                $supervisorUser,
+                fn ($q) => $q->where('supervisor_id', $supervisorUser->id),
+                fn ($q) => $q->whereNull('supervisor_id')->where(function ($q) {
+                    $q->where('role', 'staff')
+                      ->orWhere(fn ($q) => $q->where('role', 'supervisor')->where('is_staff', true));
+                })
+            )
+            ->orderBy('name')
+            ->get();
+
+        $tasks = $cycle
+            ? TaskLog::with('reviewer')
+                ->whereIn('staff_id', $team->pluck('id'))
+                ->where('cycle_id', $cycle->id)
+                ->orderByDesc('date')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('staff_id')
+            : collect();
+
+        return view('staff_performance.tasks_supervisor', compact('cycle', 'cycles', 'supervisorUser', 'team', 'tasks'));
+    }
 }
