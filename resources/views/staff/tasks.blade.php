@@ -14,8 +14,14 @@
 @endsection
 
 @section('content')
+@php
+  $newLogType = old('log_type', 'daily');
+  $typeCounts = $typeCounts ?? ['all' => $tasks->count(), 'daily' => 0, 'weekly' => 0];
+  $type       = $type ?? null;
+@endphp
+
 <div class="text-2xl font-bold text-gray-900 mb-1">My tasks</div>
-<div class="text-sm text-gray-500 mb-5">Log what you did, submit it for review, and read your supervisor's feedback.</div>
+<div class="text-sm text-gray-500 mb-5">Log what you did daily or weekly, submit it for review, and read your supervisor's feedback.</div>
 
 {{-- Log a task form --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl p-4 sm:p-5 mb-5">
@@ -23,14 +29,33 @@
   <form method="POST" action="{{ route('staff.tasks.store') }}">
     @csrf
 
+    {{-- Daily / Weekly --}}
+    <div class="mb-4">
+      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Log type</label>
+      <div class="grid grid-cols-2 gap-2">
+        @foreach(['daily' => ['Daily', 'ti-sun'], 'weekly' => ['Weekly', 'ti-calendar-week']] as $val => [$lbl, $ico])
+        <label class="block w-full">
+          <input type="radio" name="log_type" value="{{ $val }}" {{ $newLogType === $val ? 'checked' : '' }}
+            onchange="updateLogType('new', this.value)" class="sr-only peer">
+          <div class="flex items-center justify-center gap-1.5 py-2 px-2.5 border border-[#e0daf5] rounded-lg text-sm cursor-pointer peer-checked:bg-[#3C3489] peer-checked:text-white peer-checked:border-[#3C3489] hover:bg-[#eeedfe] transition">
+            <i class="ti {{ $ico }}"></i> {{ $lbl }}
+          </div>
+        </label>
+        @endforeach
+      </div>
+    </div>
+
     <div class="mb-3">
       <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Title</label>
       <input name="title" value="{{ old('title') }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="e.g. Outreach with my team" required>
     </div>
 
     <div class="mb-3">
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Date</label>
+      <label id="date-label-new" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{{ $newLogType === 'weekly' ? 'Week of' : 'Date' }}</label>
       <input type="date" name="date" value="{{ old('date', date('Y-m-d')) }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
+      <div id="date-hint-new" class="text-[11px] text-gray-400 mt-1 {{ $newLogType === 'weekly' ? '' : 'hidden' }}">
+        Pick any day in the week. It will be logged for that week, Monday to Sunday.
+      </div>
     </div>
 
     {{-- Target Field --}}
@@ -117,7 +142,19 @@
   </form>
 </div>
 
-<div class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">My recent tasks</div>
+{{-- Recent tasks header + Daily / Weekly filter --}}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+  <div class="text-xs font-semibold text-gray-400 uppercase tracking-widest">My recent tasks</div>
+  <div class="inline-flex bg-white border border-[#e0daf5] rounded-lg p-0.5 text-xs self-start">
+    @foreach([null => 'All', 'daily' => 'Daily', 'weekly' => 'Weekly'] as $key => $lbl)
+    @php $countKey = $key ?? 'all'; @endphp
+    <a href="{{ route('staff.tasks', $key ? ['type' => $key] : []) }}"
+       class="px-3 py-1.5 rounded-md transition whitespace-nowrap {{ $type === $key ? 'bg-[#3C3489] text-white font-medium' : 'text-gray-500 hover:bg-[#eeedfe] hover:text-[#3C3489]' }}">
+      {{ $lbl }} <span class="{{ $type === $key ? 'text-white/70' : 'text-gray-400' }}">({{ $typeCounts[$countKey] ?? 0 }})</span>
+    </a>
+    @endforeach
+  </div>
+</div>
 
 @forelse($tasks as $task)
 <div class="bg-white border border-[#e0daf5] rounded-xl p-4 mb-3">
@@ -127,6 +164,9 @@
     <div class="flex-1 min-w-0">
       <div class="font-medium text-gray-900 text-sm mb-1.5 break-words">{{ $task->title }}</div>
       <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
+        <span class="text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap {{ $task->getLogTypeColorClass() }}">
+          {{ $task->getLogTypeLabel() }}
+        </span>
         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap {{ $task->getStatusColorClass() }}">
           {{ $task->getStatusLabel() }}
         </span>
@@ -145,7 +185,13 @@
         </span>
         @endif
       </div>
-      <div class="text-[11px] text-gray-400 mb-2">{{ $task->date->format('d M Y') }}</div>
+      <div class="text-[11px] text-gray-400 mb-2">
+        @if($task->isWeekly())
+          <i class="ti ti-calendar-week"></i> Week of {{ $task->getPeriodLabel() }}
+        @else
+          {{ $task->getPeriodLabel() }}
+        @endif
+      </div>
 
       @if($task->target)
       <div class="text-xs text-amber-700 mb-1.5 break-words">
@@ -221,14 +267,33 @@
       @csrf
       @method('PUT')
 
+      {{-- Daily / Weekly --}}
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Log type</label>
+        <div class="grid grid-cols-2 gap-2">
+          @foreach(['daily' => ['Daily', 'ti-sun'], 'weekly' => ['Weekly', 'ti-calendar-week']] as $val => [$lbl, $ico])
+          <label class="block w-full">
+            <input type="radio" name="log_type" value="{{ $val }}" {{ $task->log_type === $val ? 'checked' : '' }}
+              onchange="updateLogType('{{ $task->id }}', this.value)" class="sr-only peer">
+            <div class="flex items-center justify-center gap-1.5 py-2 px-2.5 border border-[#e0daf5] rounded-lg text-sm cursor-pointer peer-checked:bg-[#3C3489] peer-checked:text-white peer-checked:border-[#3C3489] hover:bg-[#eeedfe] transition">
+              <i class="ti {{ $ico }}"></i> {{ $lbl }}
+            </div>
+          </label>
+          @endforeach
+        </div>
+      </div>
+
       <div class="mb-3">
         <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Title</label>
         <input name="title" value="{{ $task->title }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
       </div>
 
       <div class="mb-3">
-        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Date</label>
+        <label id="date-label-{{ $task->id }}" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{{ $task->isWeekly() ? 'Week of' : 'Date' }}</label>
         <input type="date" name="date" value="{{ $task->date->format('Y-m-d') }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
+        <div id="date-hint-{{ $task->id }}" class="text-[11px] text-gray-400 mt-1 {{ $task->isWeekly() ? '' : 'hidden' }}">
+          Pick any day in the week. It will be logged for that week, Monday to Sunday.
+        </div>
       </div>
 
       <div class="mb-3">
@@ -313,7 +378,13 @@
 @empty
 <div class="bg-white border border-[#e0daf5] rounded-xl p-6 sm:p-8 text-center">
   <i class="ti ti-checkbox text-4xl text-[#AFA9EC] block mb-2"></i>
-  <div class="text-sm text-gray-400">No tasks logged yet. Use the form above to log your first task.</div>
+  <div class="text-sm text-gray-400">
+    @if($type)
+      No {{ $type }} tasks logged yet this cycle.
+    @else
+      No tasks logged yet. Use the form above to log your first task.
+    @endif
+  </div>
 </div>
 @endforelse
 
@@ -324,6 +395,15 @@ function toggleEditTask(id) {
   const editing = !form.classList.contains('hidden');
   form.classList.toggle('hidden', editing);
   display.classList.toggle('hidden', !editing);
+}
+
+// Switch the date field between "Date" (daily) and "Week of" (weekly)
+function updateLogType(scope, type) {
+  const weekly = type === 'weekly';
+  const label = document.getElementById('date-label-' + scope);
+  const hint = document.getElementById('date-hint-' + scope);
+  if (label) label.textContent = weekly ? 'Week of' : 'Date';
+  if (hint) hint.classList.toggle('hidden', !weekly);
 }
 </script>
 @endsection

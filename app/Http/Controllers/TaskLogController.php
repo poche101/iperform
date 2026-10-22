@@ -9,6 +9,7 @@ use App\Models\AppraisalInnovation;
 use App\Models\AppraisalCycle;
 use App\Models\TaskLog;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -16,6 +17,8 @@ use Illuminate\Validation\Rule;
 class TaskLogController extends Controller
 {
     private const IDEAS_CATEGORY = 'Ideas, Innovation & Outstanding Contribution';
+
+    private const LOG_TYPES = ['daily', 'weekly'];
 
     /**
      * Supervisor/HR pages: pick which cycle to look at.
@@ -38,31 +41,22 @@ class TaskLogController extends Controller
         return $cycle && !$cycle->isOpenForStaff();
     }
 
-    // -------------------------------------------------------
-    // STAFF: view own task log page
-    // -------------------------------------------------------
-    public function staffIndex()
+    /** Reads ?type=daily|weekly from the request; anything else means "show all". */
+    private function resolveLogType(Request $request): ?string
     {
-        $user  = Auth::user();
-        $cycle = AppraisalCycle::where('is_active', true)->first();
-
-        $tasks = $cycle
-            ? TaskLog::where('staff_id', $user->id)
-                ->where('cycle_id', $cycle->id)
-                ->orderByDesc('date')
-                ->orderByDesc('id')
-                ->get()
-            : collect();
-
-        return view('staff.tasks', compact('user', 'cycle', 'tasks'));
+        $type = $request->query('type');
+        return in_array($type, self::LOG_TYPES, true) ? $type : null;
     }
 
-    // -------------------------------------------------------
-    // STAFF: log a new task
-    // -------------------------------------------------------
-    public function staffStore(Request $request)
+    /**
+     * Validation rules shared by store and update.
+     * Daily  -> `date` is the day the work was done.
+     * Weekly -> `date` can be any day in the week being reported; it is normalised to Monday–Sunday.
+     */
+    private function taskRules(): array
     {
-        $request->validate([
+        return [
+            'log_type'              => ['required', Rule::in(self::LOG_TYPES)],
             'title'                 => 'required|string|max:255',
             'target'                => 'nullable|string',
             'date'                  => 'required|date',
@@ -72,11 +66,77 @@ class TaskLogController extends Controller
             'category'              => ['required', Rule::in([
                 'KRA',
                 'Routine',
-                'Ideas, Innovation & Outstanding Contribution',
+                self::IDEAS_CATEGORY,
             ])],
             'self_score'            => 'nullable|integer|min:0|max:10',
             'completion_percentage' => 'nullable|integer|min:0|max:100',
-        ]);
+        ];
+    }
+
+    /**
+     * Works out the period columns for a log entry.
+     * For weekly logs, `date` is stored as the Monday of that week so ordering and
+     * existing views keep working; week_start / week_end hold the full range.
+     */
+    private function periodData(Request $request): array
+    {
+        $date = Carbon::parse($request->date);
+
+        if ($request->log_type === 'weekly') {
+            $start = $date->copy()->startOfWeek(Carbon::MONDAY);
+            $end   = $date->copy()->endOfWeek(Carbon::SUNDAY);
+
+            return [
+                'log_type'   => 'weekly',
+                'date'       => $start->toDateString(),
+                'week_start' => $start->toDateString(),
+                'week_end'   => $end->toDateString(),
+            ];
+        }
+
+        return [
+            'log_type'   => 'daily',
+            'date'       => $date->toDateString(),
+            'week_start' => null,
+            'week_end'   => null,
+        ];
+    }
+
+    // -------------------------------------------------------
+    // STAFF: view own task log page
+    // ?type=daily|weekly filters the list; no type shows both.
+    // -------------------------------------------------------
+    public function staffIndex(Request $request)
+    {
+        $user  = Auth::user();
+        $cycle = AppraisalCycle::where('is_active', true)->first();
+        $type  = $this->resolveLogType($request);
+
+        $allTasks = $cycle
+            ? TaskLog::where('staff_id', $user->id)
+                ->where('cycle_id', $cycle->id)
+                ->orderByDesc('date')
+                ->orderByDesc('id')
+                ->get()
+            : collect();
+
+        $typeCounts = [
+            'all'    => $allTasks->count(),
+            'daily'  => $allTasks->where('log_type', 'daily')->count(),
+            'weekly' => $allTasks->where('log_type', 'weekly')->count(),
+        ];
+
+        $tasks = $type ? $allTasks->where('log_type', $type)->values() : $allTasks;
+
+        return view('staff.tasks', compact('user', 'cycle', 'tasks', 'type', 'typeCounts'));
+    }
+
+    // -------------------------------------------------------
+    // STAFF: log a new task (daily or weekly)
+    // -------------------------------------------------------
+    public function staffStore(Request $request)
+    {
+        $request->validate($this->taskRules());
 
         $cycle = AppraisalCycle::where('is_active', true)->firstOrFail();
 
@@ -96,15 +156,14 @@ class TaskLogController extends Controller
             ]
         );
 
-        $taskLog = TaskLog::create([
+        $taskLog = TaskLog::create($this->periodData($request) + [
             'staff_id'              => Auth::id(),
             'cycle_id'              => $cycle->id,
-            'appraisal_id'          => $appraisal->id,           // ← Important
+            'appraisal_id'          => $appraisal->id,
             'title'                 => $request->title,
             'target'                => $request->target,
-            'date'                  => $request->date,
             'details'               => $request->details,
-            'challenge_identified'  => $request->challenge_identified, // Save challenge info
+            'challenge_identified'  => $request->challenge_identified,
             'challenge_impact'      => $request->challenge_impact,
             'category'              => $request->category,
             'self_score'            => $request->self_score ?? 0,
@@ -120,7 +179,9 @@ class TaskLogController extends Controller
             $supervisor->notify(new \App\Notifications\TaskSubmitted($taskLog));
         }
 
-        return back()->with('success', 'Task logged successfully and synced to your Appraisal!');
+        $label = $taskLog->log_type === 'weekly' ? 'Weekly' : 'Daily';
+
+        return back()->with('success', "{$label} task logged successfully and synced to your Appraisal!");
     }
 
     // -------------------------------------------------------
@@ -135,26 +196,11 @@ class TaskLogController extends Controller
             return back()->with('error', 'The deadline for this cycle has passed, so this task can no longer be changed.');
         }
 
-        $request->validate([
-            'title'                 => 'required|string|max:255',
-            'target'                => 'nullable|string',
-            'date'                  => 'required|date',
-            'details'               => 'nullable|string',
-            'challenge_identified'  => 'nullable|string',
-            'challenge_impact'      => 'nullable|string',
-            'category'              => ['required', Rule::in([
-                'KRA',
-                'Routine',
-                'Ideas, Innovation & Outstanding Contribution',
-            ])],
-            'self_score'            => 'nullable|integer|min:0|max:10',
-            'completion_percentage' => 'nullable|integer|min:0|max:100',
-        ]);
+        $request->validate($this->taskRules());
 
-        $taskLog->update([
+        $taskLog->update($this->periodData($request) + [
             'title'                 => $request->title,
             'target'                => $request->target,
-            'date'                  => $request->date,
             'details'               => $request->details,
             'challenge_identified'  => $request->challenge_identified,
             'challenge_impact'      => $request->challenge_impact,
@@ -181,7 +227,7 @@ class TaskLogController extends Controller
 
         // Check if this task is already linked
         $existing = $model::where('appraisal_id', $appraisal->id)
-                          ->where('task_log_id', $taskLog->id)  // we'll add this column
+                          ->where('task_log_id', $taskLog->id)
                           ->first();
 
         if ($existing) {
@@ -256,14 +302,16 @@ class TaskLogController extends Controller
         $team     = User::where('supervisor_id', $user->id)->orderBy('name')->get();
         $staffIds = $team->pluck('id');
 
-        // Per-staff task counts for the selected cycle (total / awaiting / graded)
+        // Per-staff task counts for the selected cycle (total / awaiting / graded, plus daily / weekly)
         $statsByStaff = $cycle
             ? TaskLog::whereIn('staff_id', $staffIds)
                 ->where('cycle_id', $cycle->id)
                 ->selectRaw("staff_id,
                     count(*) as total,
                     sum(case when status = 'awaiting' then 1 else 0 end) as awaiting,
-                    sum(case when status = 'graded' then 1 else 0 end) as graded")
+                    sum(case when status = 'graded' then 1 else 0 end) as graded,
+                    sum(case when log_type = 'daily' then 1 else 0 end) as daily,
+                    sum(case when log_type = 'weekly' then 1 else 0 end) as weekly")
                 ->groupBy('staff_id')
                 ->get()
                 ->keyBy('staff_id')
@@ -292,6 +340,7 @@ class TaskLogController extends Controller
     // -------------------------------------------------------
     // SUPERVISOR: one staff member's log. Shows KRA / Routine / Ideas cards;
     // ?category=kra|routine|ideas lists the tasks under that category.
+    // ?type=daily|weekly narrows everything to one kind of log.
     // -------------------------------------------------------
     public function supervisorStaff(Request $request, User $staff)
     {
@@ -300,12 +349,21 @@ class TaskLogController extends Controller
         abort_unless($staff->supervisor_id === $user->id, 403);
 
         [$cycle, $cycles] = $this->resolveCycle($request);
+        $type = $this->resolveLogType($request);
 
-        $tasks = $cycle
+        $allTasks = $cycle
             ? TaskLog::where('staff_id', $staff->id)
                 ->where('cycle_id', $cycle->id)
                 ->get()
             : collect();
+
+        $typeCounts = [
+            'all'    => $allTasks->count(),
+            'daily'  => $allTasks->where('log_type', 'daily')->count(),
+            'weekly' => $allTasks->where('log_type', 'weekly')->count(),
+        ];
+
+        $tasks = $type ? $allTasks->where('log_type', $type)->values() : $allTasks;
 
         // Routine is the fallback bucket (same as syncToAppraisal), so an unexpected category never disappears
         $buckets = [
@@ -346,7 +404,8 @@ class TaskLogController extends Controller
             ->pluck('total', 'cycle_id');
 
         return view('supervisor.tasks_staff', compact(
-            'user', 'staff', 'cycle', 'cycles', 'sections', 'activeKey', 'activeTasks', 'pendingByCycle'
+            'user', 'staff', 'cycle', 'cycles', 'sections', 'activeKey', 'activeTasks',
+            'pendingByCycle', 'type', 'typeCounts'
         ));
     }
 

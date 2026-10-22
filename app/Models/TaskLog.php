@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class TaskLog extends Model
@@ -10,12 +11,15 @@ class TaskLog extends Model
         'staff_id',
         'cycle_id',
         'appraisal_id',
+        'log_type',             // daily | weekly
         'title',
         'target',
         'date',
+        'week_start',           // weekly only (Monday)
+        'week_end',             // weekly only (Sunday)
         'details',
-        'challenge_identified', // Add this
-    'challenge_impact',     // Add this
+        'challenge_identified',
+        'challenge_impact',
         'category',
         'self_score',
         'completion_percentage',
@@ -28,6 +32,8 @@ class TaskLog extends Model
 
     protected $casts = [
         'date'        => 'date',
+        'week_start'  => 'date',
+        'week_end'    => 'date',
         'reviewed_at' => 'datetime',
     ];
 
@@ -35,12 +41,67 @@ class TaskLog extends Model
     public function cycle()    { return $this->belongsTo(AppraisalCycle::class); }
     public function reviewer() { return $this->belongsTo(User::class, 'reviewed_by'); }
 
+    public function appraisal()
+    {
+        return $this->belongsTo(Appraisal::class);
+    }
+
+    // -------------------------------------------------------
+    // Daily / weekly helpers
+    // -------------------------------------------------------
+
+    public function scopeDaily(Builder $query): Builder
+    {
+        return $query->where('log_type', 'daily');
+    }
+
+    public function scopeWeekly(Builder $query): Builder
+    {
+        return $query->where('log_type', 'weekly');
+    }
+
+    public function isWeekly(): bool
+    {
+        return $this->log_type === 'weekly';
+    }
+
+    public function getLogTypeLabel(): string
+    {
+        return $this->isWeekly() ? 'Weekly' : 'Daily';
+    }
+
+    public function getLogTypeColorClass(): string
+    {
+        return $this->isWeekly()
+            ? 'bg-sky-100 text-sky-700'
+            : 'bg-gray-100 text-gray-600';
+    }
+
+    /** e.g. "22 Oct 2026" for daily, "19 Oct – 25 Oct 2026" for weekly */
+    public function getPeriodLabel(): string
+    {
+        if ($this->isWeekly() && $this->week_start && $this->week_end) {
+            $sameYear = $this->week_start->year === $this->week_end->year;
+
+            return $this->week_start->format($sameYear ? 'd M' : 'd M Y')
+                . ' – '
+                . $this->week_end->format('d M Y');
+        }
+
+        return optional($this->date)->format('d M Y') ?? '';
+    }
+
+    // -------------------------------------------------------
+    // Existing helpers
+    // -------------------------------------------------------
+
     public function getCategoryColorClass(): string
     {
         return match($this->category) {
-            'KRA'        => 'bg-[#eeedfe] text-[#3C3489]',
-            'Innovation' => 'bg-amber-100 text-amber-700',
-            default      => 'bg-green-100 text-green-700',
+            'KRA'                                          => 'bg-[#eeedfe] text-[#3C3489]',
+            'Innovation',
+            'Ideas, Innovation & Outstanding Contribution' => 'bg-amber-100 text-amber-700',
+            default                                        => 'bg-green-100 text-green-700',
         };
     }
 
@@ -51,11 +112,6 @@ class TaskLog extends Model
             'awaiting' => 'bg-amber-100 text-amber-700',
             default    => 'bg-gray-100 text-gray-500',
         };
-    }
-
-    public function appraisal()
-    {
-        return $this->belongsTo(Appraisal::class);
     }
 
     public function getStatusLabel(): string

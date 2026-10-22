@@ -11,8 +11,14 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('staff_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('cycle_id')->constrained('appraisal_cycles')->cascadeOnDelete();
+
+            // Daily or weekly log entry
+            $table->string('log_type', 10)->default('daily')->index();
+
             $table->string('title');
-            $table->date('date');
+            $table->date('date');                    // daily: the day worked; weekly: Monday of the week
+            $table->date('week_start')->nullable();  // weekly only (Monday)
+            $table->date('week_end')->nullable();    // weekly only (Sunday)
             $table->text('details')->nullable();
             $table->enum('category', ['KRA', 'Routine', 'Innovation'])->default('Routine');
             $table->unsignedTinyInteger('self_score')->nullable(); // 0-10
