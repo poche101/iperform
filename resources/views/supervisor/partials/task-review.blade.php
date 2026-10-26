@@ -1,4 +1,20 @@
-@php $graded = $task->status === 'graded'; @endphp
+@php
+  $graded  = $task->status === 'graded';
+  $logType = $task->log_type === 'weekly' ? 'weekly' : 'daily';
+  $isWeekly = $logType === 'weekly';
+
+  $typeBadge = $isWeekly
+      ? ['label' => 'Weekly', 'class' => 'bg-indigo-100 text-indigo-700', 'icon' => 'ti-calendar-week']
+      : ['label' => 'Daily',  'class' => 'bg-sky-100 text-sky-700',       'icon' => 'ti-sun'];
+
+  if ($isWeekly && $task->week_start && $task->week_end) {
+      $start = \Illuminate\Support\Carbon::parse($task->week_start);
+      $end   = \Illuminate\Support\Carbon::parse($task->week_end);
+      $dateLabel = $start->format('d M') . ' – ' . $end->format('d M Y');
+  } else {
+      $dateLabel = $task->date->format('d M Y');
+  }
+@endphp
 <div class="bg-white border border-[#e0daf5] rounded-xl p-4 mb-3">
   <div class="flex items-start gap-3 {{ $graded ? '' : 'mb-3' }}">
     <div class="flex-1 min-w-0">
@@ -6,6 +22,9 @@
       <div class="flex flex-wrap gap-2 mt-1.5">
         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full {{ $graded ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700' }}">
           {{ $graded ? 'Graded' : 'Awaiting review' }}
+        </span>
+        <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full {{ $typeBadge['class'] }}">
+          <i class="ti {{ $typeBadge['icon'] }} text-xs"></i> {{ $typeBadge['label'] }}
         </span>
         @if($task->self_score !== null)
           <span class="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Staff self-score: {{ $task->self_score }}/10</span>
@@ -18,7 +37,7 @@
         @endif
       </div>
     </div>
-    <div class="text-[11px] text-gray-400 whitespace-nowrap">{{ $task->date->format('d M Y') }}</div>
+    <div class="text-[11px] text-gray-400 whitespace-nowrap">{{ $dateLabel }}</div>
   </div>
 
   @if($task->details)

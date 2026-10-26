@@ -8,6 +8,8 @@ use App\Http\Controllers\AppraisalController;
 use App\Http\Controllers\TaskLogController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\ChangePasswordController;
+use App\Http\Controllers\AppraisalCommentController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +41,13 @@ Route::middleware('auth')->group(function () {
     Route::put('/account/password', [ChangePasswordController::class, 'update'])
         ->middleware('throttle:6,1')
         ->name('password.change.update');
+});
+
+// In-app notifications (the bell) — all authenticated roles
+Route::middleware('auth')->group(function () {
+    Route::get('/notifications/feed', [NotificationController::class, 'feed'])->name('notifications.feed');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.readAll');
+    Route::get('/notifications/{id}/open', [NotificationController::class, 'open'])->name('notifications.open');
 });
 
 // Web Push subscription endpoint
@@ -84,6 +93,8 @@ Route::middleware(['auth'])->prefix('supervisor')->name('supervisor.')->group(fu
     Route::get('/appraisal/{appraisal}', [AppraisalController::class, 'supervisorShow'])->name('appraisal.show');
     Route::post('/appraisal/{appraisal}/save', [AppraisalController::class, 'supervisorSave'])->name('appraisal.save');
     Route::post('/appraisal/{appraisal}/forward', [AppraisalController::class, 'supervisorForward'])->name('appraisal.forward');
+    // Per-row comment (KRA / task / idea) saved from the comment drawer
+    Route::post('/appraisal/{appraisal}/comment', [AppraisalCommentController::class, 'store'])->name('appraisal.comment');
 });
 
 // Staff Performance (Maintains prefix and named routes as 'hr' to match your layouts)
@@ -104,6 +115,7 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::get('/tasks/supervisor/{supervisor}', [TaskLogController::class, 'hrSupervisor'])
         ->where('supervisor', '[0-9]+|none')
         ->name('tasks.supervisor');
+
     // Appraisal history (every appraisal, across every cycle) — must come before {appraisal} below
     Route::get('/appraisal/history', [AppraisalController::class, 'hrHistory'])->name('appraisal.history');
     Route::get('/appraisal/{appraisal}', [AppraisalController::class, 'hrShow'])->name('appraisal.show');

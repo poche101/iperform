@@ -51,7 +51,7 @@ class TaskLogController extends Controller
     /**
      * Validation rules shared by store and update.
      * Daily  -> `date` is the day the work was done.
-     * Weekly -> `date` can be any day in the week being reported; it is normalised to Monday–Sunday.
+     * Weekly -> `week_start` (From) and `week_end` (To) define the period; `date` is not sent.
      */
     private function taskRules(): array
     {
@@ -59,7 +59,9 @@ class TaskLogController extends Controller
             'log_type'              => ['required', Rule::in(self::LOG_TYPES)],
             'title'                 => 'required|string|max:255',
             'target'                => 'nullable|string',
-            'date'                  => 'required|date',
+            'date'                  => ['required_if:log_type,daily', 'nullable', 'date'],
+            'week_start'            => ['required_if:log_type,weekly', 'nullable', 'date'],
+            'week_end'              => ['required_if:log_type,weekly', 'nullable', 'date', 'after_or_equal:week_start'],
             'details'               => 'nullable|string',
             'challenge_identified'  => 'nullable|string',
             'challenge_impact'      => 'nullable|string',
@@ -73,18 +75,26 @@ class TaskLogController extends Controller
         ];
     }
 
+    private function taskMessages(): array
+    {
+        return [
+            'date.required_if'              => 'Please pick the date for this daily task.',
+            'week_start.required_if'        => 'Please pick the "From" date for this weekly task.',
+            'week_end.required_if'          => 'Please pick the "To" date for this weekly task.',
+            'week_end.after_or_equal'       => 'The "To" date cannot be earlier than the "From" date.',
+        ];
+    }
+
     /**
      * Works out the period columns for a log entry.
-     * For weekly logs, `date` is stored as the Monday of that week so ordering and
-     * existing views keep working; week_start / week_end hold the full range.
+     * Weekly: the staff member picks From and To. `date` is stored as the From date so
+     * ordering and existing views keep working; week_start / week_end hold the full range.
      */
     private function periodData(Request $request): array
     {
-        $date = Carbon::parse($request->date);
-
         if ($request->log_type === 'weekly') {
-            $start = $date->copy()->startOfWeek(Carbon::MONDAY);
-            $end   = $date->copy()->endOfWeek(Carbon::SUNDAY);
+            $start = Carbon::parse($request->week_start);
+            $end   = Carbon::parse($request->week_end);
 
             return [
                 'log_type'   => 'weekly',
@@ -96,7 +106,7 @@ class TaskLogController extends Controller
 
         return [
             'log_type'   => 'daily',
-            'date'       => $date->toDateString(),
+            'date'       => Carbon::parse($request->date)->toDateString(),
             'week_start' => null,
             'week_end'   => null,
         ];
@@ -136,7 +146,7 @@ class TaskLogController extends Controller
     // -------------------------------------------------------
     public function staffStore(Request $request)
     {
-        $request->validate($this->taskRules());
+        $request->validate($this->taskRules(), $this->taskMessages());
 
         $cycle = AppraisalCycle::where('is_active', true)->firstOrFail();
 
@@ -196,7 +206,7 @@ class TaskLogController extends Controller
             return back()->with('error', 'The deadline for this cycle has passed, so this task can no longer be changed.');
         }
 
-        $request->validate($this->taskRules());
+        $request->validate($this->taskRules(), $this->taskMessages());
 
         $taskLog->update($this->periodData($request) + [
             'title'                 => $request->title,
@@ -498,6 +508,12 @@ class TaskLogController extends Controller
         return view('staff_performance.tasks', compact('cycle', 'cycles', 'tasks', 'allStaff'));
     }
 
+    // -------------------------------------------------------
+    // HR: one supervisor's staff. Each staff card opens that person's full
+    // appraisal (hr.appraisal.show) for the selected cycle.
+    // The month bar lets HR jump to any previous cycle; $pendingByCycle
+    // flags the months that still have logs awaiting review.
+    // -------------------------------------------------------
     public function hrSupervisor(Request $request, string $supervisor)
     {
         abort_unless(Auth::user()->isHR(), 403);
@@ -517,9 +533,11 @@ class TaskLogController extends Controller
             ->orderBy('name')
             ->get();
 
+        $staffIds = $team->pluck('id');
+
         $tasks = $cycle
             ? TaskLog::with('reviewer')
-                ->whereIn('staff_id', $team->pluck('id'))
+                ->whereIn('staff_id', $staffIds)
                 ->where('cycle_id', $cycle->id)
                 ->orderByDesc('date')
                 ->orderByDesc('id')
@@ -527,6 +545,25 @@ class TaskLogController extends Controller
                 ->groupBy('staff_id')
             : collect();
 
-        return view('staff_performance.tasks_supervisor', compact('cycle', 'cycles', 'supervisorUser', 'team', 'tasks'));
+        // Each staff member's appraisal for the selected cycle (if one exists yet),
+        // so the view can link straight to hr.appraisal.show.
+        $appraisalsByStaff = $cycle
+            ? Appraisal::whereIn('staff_id', $staffIds)
+                ->where('cycle_id', $cycle->id)
+                ->get()
+                ->keyBy('staff_id')
+            : collect();
+
+        // Ungraded task counts per cycle for this supervisor's staff,
+        // so the month bar can flag previous months that still need marking.
+        $pendingByCycle = TaskLog::whereIn('staff_id', $staffIds)
+            ->where('status', 'awaiting')
+            ->selectRaw('cycle_id, count(*) as total')
+            ->groupBy('cycle_id')
+            ->pluck('total', 'cycle_id');
+
+        return view('staff_performance.tasks_supervisor', compact(
+            'cycle', 'cycles', 'supervisorUser', 'team', 'tasks', 'appraisalsByStaff', 'pendingByCycle'
+        ));
     }
 }

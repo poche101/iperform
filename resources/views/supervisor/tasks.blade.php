@@ -12,7 +12,7 @@
   <div class="flex items-start justify-between flex-wrap gap-3 mb-6">
     <div>
       <div class="text-2xl font-bold text-gray-900">Tasks</div>
-      <div class="text-sm text-gray-500 mt-0.5">Select a staff member to open their appraisal for the chosen cycle.</div>
+      <div class="text-sm text-gray-500 mt-0.5">Select a staff member to grade their tasks for the chosen cycle. You don't need to wait for them to submit.</div>
     </div>
 
     {{-- Cycle selector: switching the active cycle never hides earlier months --}}
@@ -69,6 +69,8 @@
               $total     = (int) ($stats->total ?? 0);
               $awaiting  = (int) ($stats->awaiting ?? 0);
               $graded    = (int) ($stats->graded ?? 0);
+              $daily     = (int) ($stats->daily ?? 0);
+              $weekly    = (int) ($stats->weekly ?? 0);
               $appraisal = $appraisalsByStaff[$member->id] ?? null;
             @endphp
             <tr class="hover:bg-[#faf8ff] transition">
@@ -90,6 +92,12 @@
                   @endif
                   @if($graded)
                     <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">{{ $graded }} graded</span>
+                  @endif
+                  @if($daily)
+                    <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">{{ $daily }} daily</span>
+                  @endif
+                  @if($weekly)
+                    <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{{ $weekly }} weekly</span>
                   @endif
                   @if(!$total)
                     <span class="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">No tasks</span>
@@ -114,16 +122,24 @@
               </td>
 
               <td class="py-3.5 px-4 text-right">
-                @if($appraisal)
-                <a href="{{ route('supervisor.appraisal.show', $appraisal) }}"
-                   class="inline-flex items-center gap-1 text-xs border border-[#7F77DD] text-[#3C3489] px-3 py-1.5 rounded-lg hover:bg-[#eeedfe] transition">
-                  <i class="ti ti-eye text-sm"></i> View appraisal
-                </a>
-                @else
-                <span class="inline-flex items-center gap-1 text-xs border border-[#f0edf8] text-gray-300 px-3 py-1.5 rounded-lg cursor-not-allowed">
-                  <i class="ti ti-eye-off text-sm"></i> View appraisal
-                </span>
-                @endif
+                <div class="inline-flex items-center gap-2 justify-end">
+                  {{-- Always available: grading does not depend on the staff having submitted --}}
+                  <a href="{{ route('supervisor.tasks.staff', ['staff' => $member->id, 'cycle' => $cycle?->id]) }}"
+                     class="inline-flex items-center gap-1 text-xs bg-[#3C3489] text-white px-3 py-1.5 rounded-lg hover:bg-[#534AB7] transition">
+                    <i class="ti ti-checklist text-sm"></i> Grade tasks
+                  </a>
+
+                  @if($appraisal)
+                  <a href="{{ route('supervisor.appraisal.show', $appraisal) }}"
+                     class="inline-flex items-center gap-1 text-xs border border-[#7F77DD] text-[#3C3489] px-3 py-1.5 rounded-lg hover:bg-[#eeedfe] transition">
+                    <i class="ti ti-eye text-sm"></i> View appraisal
+                  </a>
+                  @else
+                  <span class="inline-flex items-center gap-1 text-xs border border-[#f0edf8] text-gray-300 px-3 py-1.5 rounded-lg cursor-not-allowed">
+                    <i class="ti ti-eye-off text-sm"></i> View appraisal
+                  </span>
+                  @endif
+                </div>
               </td>
             </tr>
             @endforeach

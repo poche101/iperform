@@ -18,14 +18,44 @@
   $newLogType = old('log_type', 'daily');
   $typeCounts = $typeCounts ?? ['all' => $tasks->count(), 'daily' => 0, 'weekly' => 0];
   $type       = $type ?? null;
+
+  // Defaults for the new-task form: today, and this week's Monday to Sunday
+  $newDate      = old('date', now()->format('Y-m-d'));
+  $newWeekStart = old('week_start', now()->startOfWeek()->format('Y-m-d'));
+  $newWeekEnd   = old('week_end', now()->endOfWeek()->format('Y-m-d'));
+  $newIsWeekly  = $newLogType === 'weekly';
 @endphp
 
-<div class="text-2xl font-bold text-gray-900 mb-1">My tasks</div>
-<div class="text-sm text-gray-500 mb-5">Log what you did daily or weekly, submit it for review, and read your supervisor's feedback.</div>
+<style>
+  /* Pulse shown on a task opened from a notification */
+  @keyframes task-focus-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(127,119,221,.55); }
+    70%  { box-shadow: 0 0 0 14px rgba(127,119,221,0); }
+    100% { box-shadow: 0 0 0 0 rgba(127,119,221,0); }
+  }
+  .task-focus { border-color: #7F77DD !important; animation: task-focus-pulse 1.4s ease-out 3; }
+</style>
+
+<div class="flex items-start justify-between gap-3 mb-5">
+  <div>
+    <div class="text-2xl font-bold text-gray-900 mb-1">My tasks</div>
+    <div class="text-sm text-gray-500">Log what you did daily or weekly, submit it for review, and read your supervisor's feedback.</div>
+  </div>
+  @include('partials.notification-bell')
+</div>
 
 {{-- Log a task form --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl p-4 sm:p-5 mb-5">
   <div class="font-semibold text-gray-800 mb-4">Log a task</div>
+
+  @if($errors->any())
+  <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+    <ul class="list-disc pl-4 space-y-0.5">
+      @foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach
+    </ul>
+  </div>
+  @endif
+
   <form method="POST" action="{{ route('staff.tasks.store') }}">
     @csrf
 
@@ -50,12 +80,32 @@
       <input name="title" value="{{ old('title') }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="e.g. Outreach with my team" required>
     </div>
 
-    <div class="mb-3">
-      <label id="date-label-new" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{{ $newLogType === 'weekly' ? 'Week of' : 'Date' }}</label>
-      <input type="date" name="date" value="{{ old('date', date('Y-m-d')) }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
-      <div id="date-hint-new" class="text-[11px] text-gray-400 mt-1 {{ $newLogType === 'weekly' ? '' : 'hidden' }}">
-        Pick any day in the week. It will be logged for that week, Monday to Sunday.
+    {{-- Daily: single date --}}
+    <div id="daily-fields-new" class="mb-3 {{ $newIsWeekly ? 'hidden' : '' }}">
+      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Date</label>
+      <input type="date" name="date" value="{{ $newDate }}"
+        {{ $newIsWeekly ? 'disabled' : 'required' }}
+        class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+    </div>
+
+    {{-- Weekly: From / To --}}
+    <div id="weekly-fields-new" class="mb-3 {{ $newIsWeekly ? '' : 'hidden' }}">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">From</label>
+          <input type="date" name="week_start" id="week-start-new" value="{{ $newWeekStart }}"
+            onchange="syncWeekRange('new')"
+            {{ $newIsWeekly ? 'required' : 'disabled' }}
+            class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">To</label>
+          <input type="date" name="week_end" id="week-end-new" value="{{ $newWeekEnd }}" min="{{ $newWeekStart }}"
+            {{ $newIsWeekly ? 'required' : 'disabled' }}
+            class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+        </div>
       </div>
+      <div class="text-[11px] text-gray-400 mt-1">Choose the first and last day this weekly report covers.</div>
     </div>
 
     {{-- Target Field --}}
@@ -157,7 +207,14 @@
 </div>
 
 @forelse($tasks as $task)
-<div class="bg-white border border-[#e0daf5] rounded-xl p-4 mb-3">
+@php
+  // Values for this task's edit form
+  $editIsWeekly  = $task->isWeekly();
+  $editDate      = $task->date->format('Y-m-d');
+  $editWeekStart = $task->week_start?->format('Y-m-d') ?? $editDate;
+  $editWeekEnd   = $task->week_end?->format('Y-m-d') ?? $task->date->copy()->addDays(6)->format('Y-m-d');
+@endphp
+<div id="task-{{ $task->id }}" class="bg-white border border-[#e0daf5] rounded-xl p-4 mb-3 scroll-mt-24">
 
   {{-- DISPLAY MODE --}}
   <div id="display-{{ $task->id }}" class="flex items-start justify-between gap-3">
@@ -187,7 +244,7 @@
       </div>
       <div class="text-[11px] text-gray-400 mb-2">
         @if($task->isWeekly())
-          <i class="ti ti-calendar-week"></i> Week of {{ $task->getPeriodLabel() }}
+          <i class="ti ti-calendar-week"></i> {{ $task->getPeriodLabel() }}
         @else
           {{ $task->getPeriodLabel() }}
         @endif
@@ -222,6 +279,22 @@
           <div class="h-1.5 rounded-full {{ $task->completion_percentage >= 80 ? 'bg-green-500' : ($task->completion_percentage >= 50 ? 'bg-amber-400' : 'bg-red-400') }}"
             style="width: {{ $task->completion_percentage }}%"></div>
         </div>
+      </div>
+      @endif
+
+      {{-- Supervisor comment (left from the appraisal page; works before and after grading) --}}
+      @if($task->supervisor_note)
+      <div class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 break-words">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i class="ti ti-message-circle-2 text-amber-600 text-xs flex-shrink-0"></i>
+            <span class="text-[10px] font-medium text-amber-700 uppercase tracking-wider truncate">Supervisor comment</span>
+          </div>
+          @if($task->supervisor_note_at)
+          <span class="text-[10px] text-gray-400 flex-shrink-0">{{ \Illuminate\Support\Carbon::parse($task->supervisor_note_at)->format('d/m/Y, H:i') }}</span>
+          @endif
+        </div>
+        <div class="text-xs text-gray-700 whitespace-pre-line">{{ $task->supervisor_note }}</div>
       </div>
       @endif
 
@@ -288,12 +361,32 @@
         <input name="title" value="{{ $task->title }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
       </div>
 
-      <div class="mb-3">
-        <label id="date-label-{{ $task->id }}" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{{ $task->isWeekly() ? 'Week of' : 'Date' }}</label>
-        <input type="date" name="date" value="{{ $task->date->format('Y-m-d') }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" required>
-        <div id="date-hint-{{ $task->id }}" class="text-[11px] text-gray-400 mt-1 {{ $task->isWeekly() ? '' : 'hidden' }}">
-          Pick any day in the week. It will be logged for that week, Monday to Sunday.
+      {{-- Daily: single date --}}
+      <div id="daily-fields-{{ $task->id }}" class="mb-3 {{ $editIsWeekly ? 'hidden' : '' }}">
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Date</label>
+        <input type="date" name="date" value="{{ $editDate }}"
+          {{ $editIsWeekly ? 'disabled' : 'required' }}
+          class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+      </div>
+
+      {{-- Weekly: From / To --}}
+      <div id="weekly-fields-{{ $task->id }}" class="mb-3 {{ $editIsWeekly ? '' : 'hidden' }}">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">From</label>
+            <input type="date" name="week_start" id="week-start-{{ $task->id }}" value="{{ $editWeekStart }}"
+              onchange="syncWeekRange('{{ $task->id }}')"
+              {{ $editIsWeekly ? 'required' : 'disabled' }}
+              class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">To</label>
+            <input type="date" name="week_end" id="week-end-{{ $task->id }}" value="{{ $editWeekEnd }}" min="{{ $editWeekStart }}"
+              {{ $editIsWeekly ? 'required' : 'disabled' }}
+              class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]">
+          </div>
         </div>
+        <div class="text-[11px] text-gray-400 mt-1">Choose the first and last day this weekly report covers.</div>
       </div>
 
       <div class="mb-3">
@@ -397,13 +490,47 @@ function toggleEditTask(id) {
   display.classList.toggle('hidden', !editing);
 }
 
-// Switch the date field between "Date" (daily) and "Week of" (weekly)
+// Swap between the single "Date" field (daily) and the "From" / "To" fields (weekly).
+// The hidden group is disabled so it is not submitted and not validated.
 function updateLogType(scope, type) {
   const weekly = type === 'weekly';
-  const label = document.getElementById('date-label-' + scope);
-  const hint = document.getElementById('date-hint-' + scope);
-  if (label) label.textContent = weekly ? 'Week of' : 'Date';
-  if (hint) hint.classList.toggle('hidden', !weekly);
+  const groups = [
+    [document.getElementById('daily-fields-' + scope), !weekly],
+    [document.getElementById('weekly-fields-' + scope), weekly],
+  ];
+
+  groups.forEach(([el, active]) => {
+    if (!el) return;
+    el.classList.toggle('hidden', !active);
+    el.querySelectorAll('input').forEach(input => {
+      input.disabled = !active;
+      input.required = active;
+    });
+  });
+
+  if (weekly) syncWeekRange(scope);
 }
+
+// Keep "To" from being earlier than "From"
+function syncWeekRange(scope) {
+  const start = document.getElementById('week-start-' + scope);
+  const end = document.getElementById('week-end-' + scope);
+  if (!start || !end) return;
+
+  end.min = start.value;
+  if (start.value && end.value && end.value < start.value) {
+    end.value = start.value;
+  }
+}
+
+// Arriving from a notification (#task-123): scroll to that task and pulse it
+document.addEventListener('DOMContentLoaded', function () {
+  if (!location.hash.startsWith('#task-')) return;
+  const el = document.getElementById(location.hash.slice(1));
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('task-focus');
+  setTimeout(function () { el.classList.remove('task-focus'); }, 5000);
+});
 </script>
 @endsection

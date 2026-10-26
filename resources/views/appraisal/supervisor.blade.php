@@ -8,16 +8,101 @@
 @section('content')
 @php
   $cycleClosed = $appraisal->cycle && !$appraisal->cycle->isOpenForStaff();
+  $isAssignedSupervisor = auth()->id() === $appraisal->supervisor_id;
 
-  // The deadline only locks staff. Supervisors can grade (and forward) a submitted appraisal,
-  // and once the cycle has closed they can also grade a draft the staff member never submitted.
-  $canEdit = auth()->id() === $appraisal->supervisor_id
+  // Supervisors can score at any point while the appraisal is still with them,
+  // including drafts the staff member hasn't submitted yet.
+  $canEdit = $isAssignedSupervisor
+      && in_array($appraisal->status, ['drafting', 'submitted'], true);
+
+  // Forwarding stays restricted: the staff member must have submitted,
+  // or the cycle deadline must have passed on an unsubmitted draft.
+  $canForward = $isAssignedSupervisor
       && (
           $appraisal->status === 'submitted'
           || ($appraisal->status === 'drafting' && $cycleClosed)
       );
-  $canEditTraining = auth()->id() === $appraisal->supervisor_id; // Sections 6, 7 & Work Confirmation always editable for the assigned supervisor
+
+  $canEditTraining = $isAssignedSupervisor; // Sections 6, 7 & Work Confirmation always editable for the assigned supervisor
+
+  // ---- Daily / Weekly tags -------------------------------------------------
+  // Every KRA / task / idea row links back to the staff member's original log via task_log_id.
+  // Load those logs once, then look each row's log_type up from here.
+  $logIds = $appraisal->kras->pluck('task_log_id')
+      ->merge($appraisal->tasks->pluck('task_log_id'))
+      ->merge($appraisal->innovations->pluck('task_log_id'))
+      ->filter()
+      ->unique()
+      ->values();
+
+  $taskLogs = $logIds->isNotEmpty()
+      ? \App\Models\TaskLog::whereIn('id', $logIds)->get()->keyBy('id')
+      : collect();
+
+  $logBadge = function ($row) use ($taskLogs) {
+      $log = $row->task_log_id ? ($taskLogs[$row->task_log_id] ?? null) : null;
+      if (!$log) {
+          return '';
+      }
+
+      if ($log->log_type === 'weekly') {
+          $label = 'Weekly';
+          if ($log->week_start && $log->week_end) {
+              $s = \Illuminate\Support\Carbon::parse($log->week_start);
+              $e = \Illuminate\Support\Carbon::parse($log->week_end);
+              $label .= ' · ' . ($s->format('M') === $e->format('M')
+                  ? $s->format('j') . '–' . $e->format('j M')
+                  : $s->format('j M') . ' – ' . $e->format('j M'));
+          }
+          return new \Illuminate\Support\HtmlString(
+              '<span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">'
+              . '<i class="ti ti-calendar-week text-xs"></i> ' . e($label) . '</span>'
+          );
+      }
+
+      return new \Illuminate\Support\HtmlString(
+          '<span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">'
+          . '<i class="ti ti-sun text-xs"></i> Daily</span>'
+      );
+  };
+
+  // ---- Comment button ------------------------------------------------------
+  // One small pill per KRA / task / idea row. All state lives in data-* attributes;
+  // the drawer at the bottom of the page reads them when the pill is clicked.
+  // When the appraisal is no longer editable, only rows that already have a comment get a pill (read-only).
+  $commentBtn = function (string $type, $row, ?string $title, ?string $context = null) use ($canEdit) {
+      $comment = (string) ($row->supervisor_comment ?? '');
+      if (!$canEdit && $comment === '') {
+          return '';
+      }
+
+      return new \Illuminate\Support\HtmlString(
+          '<button type="button" class="cmt-btn" data-cmt-open'
+          . ' data-type="' . e($type) . '"'
+          . ' data-id="' . e($row->id) . '"'
+          . ' data-title="' . e((string) $title) . '"'
+          . ' data-context="' . e(\Illuminate\Support\Str::limit((string) $context, 180)) . '"'
+          . ' data-comment="' . e($comment) . '"'
+          . ' data-has="' . ($comment !== '' ? '1' : '0') . '">'
+          . '<i class="ti ti-message-circle-2"></i>'
+          . '<span class="lbl-none">Comment</span><span class="lbl-has">Commented</span>'
+          . '</button>'
+      );
+  };
 @endphp
+
+<style>
+  .cmt-btn{display:inline-flex;align-items:center;gap:.3rem;font-size:10px;font-weight:500;line-height:1;
+    padding:.25rem .6rem;border-radius:9999px;border:1px solid #e0daf5;background:#fff;color:#534AB7;
+    cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
+  .cmt-btn:hover{background:#eeedfe;border-color:#7F77DD}
+  .cmt-btn i{font-size:12px}
+  .cmt-btn .lbl-has{display:none}
+  .cmt-btn[data-has="1"]{background:#3C3489;border-color:#3C3489;color:#fff;box-shadow:0 1px 2px rgba(60,52,137,.25)}
+  .cmt-btn[data-has="1"]:hover{background:#26215C;border-color:#26215C}
+  .cmt-btn[data-has="1"] .lbl-has{display:inline}
+  .cmt-btn[data-has="1"] .lbl-none{display:none}
+</style>
 
 <div class="flex items-start justify-between mb-5">
   <div>
@@ -39,9 +124,15 @@
 <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-5 text-sm text-amber-700 flex items-start gap-2">
   <i class="ti ti-info-circle mt-0.5"></i>
   <div>
-    Score each section (0–10). After reviewing and grading all sections, click <strong>Forward to HR</strong> to submit. You will not be able to edit after forwarding.
-    @if($appraisal->status === 'drafting')
-      <div class="mt-1 text-xs text-amber-600">The cycle deadline has passed and this appraisal was not submitted by the staff member. You can still grade it.</div>
+    Score each section (0–10) and click <strong>Save grades</strong>. You can grade at any time.
+    Use the <strong>Comment</strong> button on any KRA, task or idea to leave feedback; comments save instantly.
+    @if($canForward)
+      After reviewing all sections, click <strong>Forward to Staff Performance</strong> to submit. You will not be able to edit after forwarding.
+    @endif
+    @if($appraisal->status === 'drafting' && $cycleClosed)
+      <div class="mt-1 text-xs text-amber-600">The cycle deadline has passed and this appraisal was not submitted by the staff member. You can still grade and forward it.</div>
+    @elseif($appraisal->status === 'drafting')
+      <div class="mt-1 text-xs text-amber-600">The staff member hasn't submitted this appraisal yet. Your grades are saved as you go, and forwarding unlocks once they submit or the cycle closes.</div>
     @endif
   </div>
 </div>
@@ -86,7 +177,13 @@
         @forelse($appraisal->kras as $kra)
         <tr class="border-t border-[#f0edf8]">
           <td class="py-2 px-3 text-gray-400">{{ $kra->sn }}</td>
-          <td class="py-2 px-3 text-gray-700">{{ $kra->kra }}</td>
+          <td class="py-2 px-3 text-gray-700">
+            {{ $kra->kra }}
+            <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {{ $logBadge($kra) }}
+              {{ $commentBtn('kra', $kra, $kra->kra, $kra->achievement) }}
+            </div>
+          </td>
           <td class="py-2 px-3 text-gray-600">{{ $kra->target }}</td>
           <td class="py-2 px-3 text-gray-600">{{ $kra->achievement }}</td>
           <td class="py-2 px-3 text-center">
@@ -138,6 +235,10 @@
           <td class="py-2 px-3 text-gray-700 font-medium">
             {{ $task->task }}
             <div class="text-[11px] text-gray-400 mt-0.5 font-normal">{{ $task->date?->format('d M Y') }}</div>
+            <div class="mt-1.5 flex flex-wrap items-center gap-1.5 font-normal">
+              {{ $logBadge($task) }}
+              {{ $commentBtn('task', $task, $task->task, $task->performance) }}
+            </div>
           </td>
           <td class="py-2 px-3 text-gray-600">
             @if($task->target)
@@ -208,7 +309,13 @@
         @forelse($appraisal->innovations as $inn)
         <tr class="border-t border-[#f0edf8]">
           <td class="py-2 px-3 text-gray-400">{{ $inn->sn }}</td>
-          <td class="py-2 px-3 text-gray-700">{{ $inn->idea }}</td>
+          <td class="py-2 px-3 text-gray-700">
+            {{ $inn->idea }}
+            <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {{ $logBadge($inn) }}
+              {{ $commentBtn('innovation', $inn, $inn->idea, $inn->impact) }}
+            </div>
+          </td>
           <td class="py-2 px-3 text-gray-600">{{ $inn->impact }}</td>
           <td class="py-2 px-3 text-center">
             @php $pct = $inn->completion_percentage ?? 0; @endphp
@@ -569,7 +676,7 @@
   <button type="submit" formaction="{{ route('supervisor.appraisal.save', $appraisal) }}" class="inline-flex items-center gap-2 border border-[#7F77DD] text-[#3C3489] px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#eeedfe] transition">
     <i class="ti ti-device-floppy"></i> Save grades
   </button>
-  @if($canEdit)
+  @if($canForward)
   <button type="submit" formaction="{{ route('supervisor.appraisal.forward', $appraisal) }}" onclick="return confirm('Forward this appraisal to HR? You cannot edit it after forwarding.')" class="inline-flex items-center gap-2 bg-[#3C3489] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#26215C] transition">
     <i class="ti ti-arrow-right"></i> Forward to Staff Performance
   </button>
@@ -578,6 +685,81 @@
 @endif
 
 </form>
+
+{{-- ============================ Comment drawer ============================ --}}
+{{-- Kept outside the grading form: comments save on their own through fetch(). --}}
+<div id="cmt-overlay" class="fixed inset-0 z-40 bg-[#1e1b4b]/40 backdrop-blur-[2px] opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+<aside id="cmt-drawer"
+       role="dialog" aria-modal="true" aria-labelledby="cmt-title" aria-hidden="true"
+       data-url="{{ route('supervisor.appraisal.comment', $appraisal) }}"
+       data-can-edit="{{ $canEdit ? '1' : '0' }}"
+       class="fixed top-0 right-0 z-50 h-full w-full sm:w-[440px] bg-white shadow-2xl translate-x-full transition-transform duration-300 ease-out flex flex-col">
+
+  {{-- Header --}}
+  <div class="relative bg-gradient-to-br from-[#3C3489] to-[#534AB7] text-white px-6 pt-6 pb-5">
+    <button type="button" id="cmt-close" aria-label="Close"
+            class="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 transition">
+      <i class="ti ti-x text-lg"></i>
+    </button>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center"><i class="ti ti-message-circle-2 text-sm"></i></span>
+      <span id="cmt-type" class="text-[10px] font-semibold uppercase tracking-widest text-white/80">Comment</span>
+    </div>
+    <div id="cmt-title" class="text-lg font-semibold leading-snug pr-8 break-words"></div>
+    <div class="text-xs text-white/70 mt-1">on {{ $appraisal->staff->name }}'s appraisal · {{ $appraisal->cycle->name }}</div>
+  </div>
+
+  {{-- Body --}}
+  <div class="flex-1 overflow-y-auto px-6 py-5">
+    <div id="cmt-context-wrap" class="mb-5 hidden">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-[#534AB7] mb-1.5">What the staff member wrote</div>
+      <div id="cmt-context" class="text-sm text-gray-600 bg-[#faf8ff] border border-[#e0daf5] border-l-4 border-l-[#7F77DD] rounded-lg px-3.5 py-3 leading-relaxed break-words"></div>
+    </div>
+
+    <label for="cmt-text" class="block text-[10px] font-semibold uppercase tracking-wider text-[#534AB7] mb-1.5">Your comment</label>
+    <textarea id="cmt-text" rows="7" maxlength="1000"
+              class="w-full px-4 py-3 border border-[#e0daf5] rounded-xl text-sm text-gray-800 leading-relaxed resize-none focus:outline-none focus:border-[#7F77DD] focus:ring-4 focus:ring-[#7F77DD]/10 transition placeholder:text-gray-300"
+              placeholder="What worked well? What should improve? What is the next step?"></textarea>
+    <div class="flex items-center justify-between mt-1.5">
+      <span id="cmt-status" class="text-[11px] text-gray-400"></span>
+      <span class="text-[11px] text-gray-400"><span id="cmt-count">0</span>/1000</span>
+    </div>
+
+    <div id="cmt-chips-wrap" class="mt-4">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Quick phrases</div>
+      <div class="flex flex-wrap gap-2">
+        @foreach([
+          'Well done, this meets the target.',
+          'Good progress. Please add more detail.',
+          'Please attach evidence of completion.',
+          'This is below target. Let us discuss.',
+        ] as $phrase)
+          <button type="button" data-cmt-chip="{{ $phrase }}"
+                  class="text-[11px] px-3 py-1.5 rounded-full border border-[#e0daf5] text-[#534AB7] bg-white hover:bg-[#eeedfe] hover:border-[#7F77DD] transition text-left">
+            {{ $phrase }}
+          </button>
+        @endforeach
+      </div>
+    </div>
+  </div>
+
+  {{-- Footer --}}
+  <div class="px-6 py-4 border-t border-[#f0edf8] bg-[#fcfbfe] flex items-center gap-2">
+    <button type="button" id="cmt-clear"
+            class="text-xs text-gray-400 hover:text-red-500 transition mr-auto hidden">
+      <i class="ti ti-trash"></i> Remove comment
+    </button>
+    <button type="button" id="cmt-cancel"
+            class="px-4 py-2 rounded-lg text-sm text-gray-500 border border-[#e0daf5] hover:bg-gray-50 transition">
+      <span id="cmt-cancel-label">Cancel</span>
+    </button>
+    <button type="button" id="cmt-save"
+            class="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white bg-[#3C3489] hover:bg-[#26215C] transition disabled:opacity-60 disabled:cursor-not-allowed">
+      <i class="ti ti-check"></i> <span id="cmt-save-label">Save comment</span>
+    </button>
+  </div>
+</aside>
 @endsection
 
 @section('scripts')
@@ -630,5 +812,155 @@ function addSection6Row() {
   `;
   body.appendChild(tr);
 }
+
+// ---------------------------------------------------------------------------
+// Comment drawer
+// ---------------------------------------------------------------------------
+(function () {
+  const drawer = document.getElementById('cmt-drawer');
+  if (!drawer) return;
+
+  const overlay   = document.getElementById('cmt-overlay');
+  const titleEl   = document.getElementById('cmt-title');
+  const typeEl    = document.getElementById('cmt-type');
+  const ctxWrap   = document.getElementById('cmt-context-wrap');
+  const ctxEl     = document.getElementById('cmt-context');
+  const textEl    = document.getElementById('cmt-text');
+  const countEl   = document.getElementById('cmt-count');
+  const statusEl  = document.getElementById('cmt-status');
+  const saveBtn   = document.getElementById('cmt-save');
+  const saveLabel = document.getElementById('cmt-save-label');
+  const cancelBtn = document.getElementById('cmt-cancel');
+  const cancelLbl = document.getElementById('cmt-cancel-label');
+  const clearBtn  = document.getElementById('cmt-clear');
+  const chipsWrap = document.getElementById('cmt-chips-wrap');
+
+  const url     = drawer.dataset.url;
+  const canEdit = drawer.dataset.canEdit === '1';
+  const csrf    = '{{ csrf_token() }}';
+  const typeLabels = { kra: 'KRA comment', task: 'Task comment', innovation: 'Idea / contribution comment' };
+
+  let active = null;      // the pill that opened the drawer
+  let closeTimer = null;
+
+  function updateCount() {
+    countEl.textContent = textEl.value.length;
+  }
+
+  function setStatus(msg, tone) {
+    statusEl.textContent = msg || '';
+    statusEl.className = 'text-[11px] ' + (tone === 'error' ? 'text-red-500' : tone === 'ok' ? 'text-green-600' : 'text-gray-400');
+  }
+
+  function open(btn) {
+    clearTimeout(closeTimer);
+    active = btn;
+
+    titleEl.textContent = btn.dataset.title || '';
+    typeEl.textContent  = typeLabels[btn.dataset.type] || 'Comment';
+
+    const ctx = (btn.dataset.context || '').trim();
+    ctxWrap.classList.toggle('hidden', ctx === '');
+    ctxEl.textContent = ctx;
+
+    textEl.value = btn.dataset.comment || '';
+    textEl.readOnly = !canEdit;
+    updateCount();
+    setStatus('');
+
+    saveBtn.classList.toggle('hidden', !canEdit);
+    chipsWrap.classList.toggle('hidden', !canEdit);
+    clearBtn.classList.toggle('hidden', !canEdit || textEl.value === '');
+    cancelLbl.textContent = canEdit ? 'Cancel' : 'Close';
+    saveLabel.textContent = textEl.value ? 'Update comment' : 'Save comment';
+
+    drawer.setAttribute('aria-hidden', 'false');
+    overlay.classList.remove('opacity-0', 'pointer-events-none');
+    drawer.classList.remove('translate-x-full');
+
+    if (canEdit) setTimeout(() => { textEl.focus(); textEl.setSelectionRange(textEl.value.length, textEl.value.length); }, 320);
+  }
+
+  function close() {
+    drawer.classList.add('translate-x-full');
+    overlay.classList.add('opacity-0', 'pointer-events-none');
+    drawer.setAttribute('aria-hidden', 'true');
+    if (active) active.focus({ preventScroll: true });
+    active = null;
+  }
+
+  async function save(valueOverride) {
+    if (!active || !canEdit) return;
+
+    const value = typeof valueOverride === 'string' ? valueOverride : textEl.value.trim();
+    saveBtn.disabled = true;
+    setStatus('Saving…');
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrf,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ type: active.dataset.type, id: active.dataset.id, comment: value }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const firstError = data.errors ? Object.values(data.errors)[0][0] : null;
+        throw new Error(firstError || data.message || 'Could not save the comment.');
+      }
+
+      // Reflect the saved state on the pill (CSS handles the rest from data-has)
+      active.dataset.comment = data.comment || '';
+      active.dataset.has = data.comment ? '1' : '0';
+
+      textEl.value = data.comment || '';
+      updateCount();
+      clearBtn.classList.toggle('hidden', !data.comment);
+      saveLabel.textContent = data.comment ? 'Update comment' : 'Save comment';
+      setStatus(data.comment ? 'Saved · ' + data.saved_at : 'Comment removed', 'ok');
+
+      closeTimer = setTimeout(close, 900);
+    } catch (err) {
+      setStatus(err.message || 'Something went wrong. Please try again.', 'error');
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
+
+  // Open from any pill
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-cmt-open]');
+    if (btn) { e.preventDefault(); open(btn); }
+  });
+
+  // Quick phrases append to whatever is already written
+  document.querySelectorAll('[data-cmt-chip]').forEach(chip => {
+    chip.addEventListener('click', function () {
+      const phrase = chip.dataset.cmtChip;
+      const current = textEl.value.trim();
+      textEl.value = (current ? current + ' ' : '') + phrase;
+      textEl.focus();
+      updateCount();
+    });
+  });
+
+  textEl.addEventListener('input', updateCount);
+  saveBtn.addEventListener('click', () => save());
+  clearBtn.addEventListener('click', () => save(''));
+  cancelBtn.addEventListener('click', close);
+  document.getElementById('cmt-close').addEventListener('click', close);
+  overlay.addEventListener('click', close);
+
+  document.addEventListener('keydown', function (e) {
+    if (drawer.getAttribute('aria-hidden') === 'true') return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+  });
+})();
 </script>
 @endsection

@@ -25,6 +25,7 @@
   @if($cycles->count())
   <form method="GET" action="{{ route('supervisor.tasks.staff', $staff) }}" class="flex items-center gap-2">
     @if($activeKey)<input type="hidden" name="category" value="{{ $activeKey }}">@endif
+    @if($type)<input type="hidden" name="type" value="{{ $type }}">@endif
     <label class="text-xs font-medium text-gray-500">Cycle</label>
     <select name="cycle" onchange="this.form.submit()"
             class="px-3 py-2 border border-[#e0daf5] rounded-lg text-sm bg-white focus:outline-none focus:border-[#7F77DD]">
@@ -46,11 +47,27 @@
 </div>
 @endif
 
+{{-- Daily / Weekly filter --}}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  @foreach(['' => 'All', 'daily' => 'Daily', 'weekly' => 'Weekly'] as $tKey => $tLabel)
+    @php
+      $isTypeActive = ($type ?? '') === $tKey;
+      $count = $typeCounts[$tKey === '' ? 'all' : $tKey] ?? 0;
+    @endphp
+    <a href="{{ route('supervisor.tasks.staff', array_filter(['staff' => $staff->id, 'cycle' => $cycle?->id, 'category' => $activeKey, 'type' => $tKey])) }}"
+       class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition
+              {{ $isTypeActive ? 'bg-[#3C3489] border-[#3C3489] text-white' : 'bg-white border-[#e0daf5] text-gray-600 hover:border-[#7F77DD]' }}">
+      {{ $tLabel }}
+      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full {{ $isTypeActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500' }}">{{ $count }}</span>
+    </a>
+  @endforeach
+</div>
+
 {{-- Category tiles --}}
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
   @foreach($sections as $key => $section)
     @php $isActive = $activeKey === $key; @endphp
-    <a href="{{ route('supervisor.tasks.staff', ['staff' => $staff->id, 'cycle' => $cycle?->id, 'category' => $key]) }}"
+    <a href="{{ route('supervisor.tasks.staff', array_filter(['staff' => $staff->id, 'cycle' => $cycle?->id, 'category' => $key, 'type' => $type])) }}"
        class="block rounded-xl p-4 border transition
               {{ $isActive ? 'bg-[#eeedfe] border-[#3C3489]' : 'bg-white border-[#e0daf5] hover:border-[#7F77DD] hover:shadow-sm' }}">
       <div class="flex items-center justify-between mb-2">
@@ -90,7 +107,9 @@
   @empty
     <div class="bg-white border border-[#e0daf5] rounded-xl p-8 text-center">
       <i class="ti ti-clipboard-off text-4xl text-gray-300 block mb-2"></i>
-      <div class="text-sm text-gray-400">No {{ $sections[$activeKey]['label'] }} tasks logged in this cycle.</div>
+      <div class="text-sm text-gray-400">
+        No {{ $type ? $type . ' ' : '' }}{{ $sections[$activeKey]['label'] }} tasks logged in this cycle.
+      </div>
     </div>
   @endforelse
 @else

@@ -14,9 +14,9 @@ class TaskLog extends Model
         'log_type',             // daily | weekly
         'title',
         'target',
-        'date',
-        'week_start',           // weekly only (Monday)
-        'week_end',             // weekly only (Sunday)
+        'date',                 // daily: the day worked; weekly: same as week_start
+        'week_start',           // weekly only: "From" date picked by the staff member
+        'week_end',             // weekly only: "To" date picked by the staff member
         'details',
         'challenge_identified',
         'challenge_impact',
@@ -77,10 +77,18 @@ class TaskLog extends Model
             : 'bg-gray-100 text-gray-600';
     }
 
-    /** e.g. "22 Oct 2026" for daily, "19 Oct – 25 Oct 2026" for weekly */
+    /**
+     * e.g. "22 Oct 2026" for daily,
+     *      "19 Oct – 25 Oct 2026" for a weekly From/To range,
+     *      "19 Dec 2026 – 02 Jan 2027" when the range crosses a year.
+     */
     public function getPeriodLabel(): string
     {
         if ($this->isWeekly() && $this->week_start && $this->week_end) {
+            if ($this->week_start->isSameDay($this->week_end)) {
+                return $this->week_start->format('d M Y');
+            }
+
             $sameYear = $this->week_start->year === $this->week_end->year;
 
             return $this->week_start->format($sameYear ? 'd M' : 'd M Y')

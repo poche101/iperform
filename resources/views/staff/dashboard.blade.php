@@ -17,8 +17,13 @@
 @endsection
 
 @section('content')
-<div class="mb-1 text-2xl font-bold text-gray-900">Performance, with grace.</div>
-<div class="text-sm text-gray-500 mb-5">Submit monthly appraisals on time — eliminate salary delays caused by late submissions.</div>
+<div class="flex items-start justify-between gap-3 mb-5">
+  <div>
+    <div class="mb-1 text-2xl font-bold text-gray-900">Performance, with grace.</div>
+    <div class="text-sm text-gray-500">Submit monthly appraisals on time — eliminate salary delays caused by late submissions.</div>
+  </div>
+  @include('partials.notification-bell')
+</div>
 
 {{-- Hero card --}}
 <div class="bg-[#3C3489] text-white rounded-xl p-5 mb-5">
