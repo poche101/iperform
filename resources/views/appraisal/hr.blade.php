@@ -141,6 +141,10 @@
   </div>
 </div>
 
+{{-- Section 7 + Staff Performance Summary share one form so HR's scores save together --}}
+<form method="POST" action="{{ route('hr.appraisal.approve', $appraisal) }}" id="hr-form">
+@csrf
+
 {{-- Section 7 --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden mb-4">
   <div class="bg-[#eeedfe] px-5 py-3 flex items-center justify-between">
@@ -196,8 +200,20 @@
               </ul>
             @endif
           </td>
-          <td class="py-2 px-3 text-center"><span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $saved['score'] ?? '—' }}</span></td>
-          <td class="py-2 px-3 text-gray-500 text-xs">{{ $saved['comment'] ?? '—' }}</td>
+          <td class="py-2 px-3 text-center">
+            @if($canEdit)
+            <input type="number" min="0" max="10" step="1" name="section7[{{ $policy['key'] }}][score]" value="{{ $saved['score'] ?? '' }}" data-sec7-score class="w-16 text-center border border-[#e0daf5] rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]">
+            @else
+            <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $saved['score'] ?? '—' }}</span>
+            @endif
+          </td>
+          <td class="py-2 px-3 text-gray-500 text-xs">
+            @if($canEdit)
+            <textarea name="section7[{{ $policy['key'] }}][comment]" rows="2" class="w-full border border-[#e0daf5] rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-[#7F77DD]" placeholder="Comment">{{ $saved['comment'] ?? '' }}</textarea>
+            @else
+            {{ $saved['comment'] ?? '—' }}
+            @endif
+          </td>
         </tr>
         @endforeach
 
@@ -207,13 +223,25 @@
         <tr class="border-t border-[#f0edf8]">
           <td class="py-2 px-3 text-gray-400">6</td>
           <td class="py-2 px-3 text-gray-700">Number of official warnings and other disciplinary actions for negligence or misconduct</td>
-          <td class="py-2 px-3 text-center"><span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $misconduct['score'] ?? '—' }}</span></td>
-          <td class="py-2 px-3 text-gray-500 text-xs">{{ $misconduct['comment'] ?? '—' }}</td>
+          <td class="py-2 px-3 text-center">
+            @if($canEdit)
+            <input type="number" min="0" max="10" step="1" name="section7_misconduct[score]" value="{{ $misconduct['score'] ?? '' }}" data-sec7-score class="w-16 text-center border border-[#e0daf5] rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-[#7F77DD]">
+            @else
+            <span class="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full text-xs">{{ $misconduct['score'] ?? '—' }}</span>
+            @endif
+          </td>
+          <td class="py-2 px-3 text-gray-500 text-xs">
+            @if($canEdit)
+            <textarea name="section7_misconduct[comment]" rows="2" class="w-full border border-[#e0daf5] rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-[#7F77DD]" placeholder="Comment">{{ $misconduct['comment'] ?? '' }}</textarea>
+            @else
+            {{ $misconduct['comment'] ?? '—' }}
+            @endif
+          </td>
         </tr>
 
         <tr class="bg-[#f5f0ff] font-semibold text-[#3C3489]">
           <td colspan="2" class="py-2 px-3">Policy / Compliance Total</td>
-          <td class="py-2 px-3 text-center">{{ $sec7ComplianceSum }} / {{ $sec7ComplianceMax }}</td>
+          <td class="py-2 px-3 text-center"><span id="sec7-compliance-total">{{ $sec7ComplianceSum }}</span> / {{ $sec7ComplianceMax }}</td>
           <td></td>
         </tr>
       </tbody>
@@ -238,9 +266,14 @@
     </div>
     <div class="mt-2 flex items-center justify-between bg-[#3C3489] rounded-lg px-4 py-2.5 text-sm">
       <span class="font-medium text-white">Section 7 Grand Total</span>
-      <span class="font-semibold text-white">{{ $sec7ComplianceSum + $sec7SummarySum }} / {{ $sec7ComplianceMax + $sec7SummaryMax }}</span>
+      <span class="font-semibold text-white"><span id="sec7-grand-total">{{ $sec7ComplianceSum + $sec7SummarySum }}</span> / {{ $sec7ComplianceMax + $sec7SummaryMax }}</span>
     </div>
-    @if($appraisal->total_score_comment)
+    @if($canEdit)
+    <div class="mt-3">
+      <label class="block text-xs text-gray-400 mb-1">Section 7 total score comment</label>
+      <textarea name="total_score_comment" rows="2" class="w-full border border-[#e0daf5] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="Comment on the Section 7 total (optional)">{{ $appraisal->total_score_comment }}</textarea>
+    </div>
+    @elseif($appraisal->total_score_comment)
     <div class="mt-3 text-xs text-gray-500"><span class="text-gray-400">Total score comment:</span> {{ $appraisal->total_score_comment }}</div>
     @endif
   </div>
@@ -257,8 +290,6 @@
 </div>
 
 {{-- Staff Performance Summary Section --}}
-<form method="POST" action="{{ route('hr.appraisal.approve', $appraisal) }}">
-@csrf
 <div class="bg-white border-2 border-[#534AB7] rounded-xl overflow-hidden mb-4">
   <div class="bg-[#3C3489] px-5 py-3">
     <div class="font-semibold text-white text-sm">Staff Performance Summary — Performance Management Only</div>
@@ -330,9 +361,17 @@ async function autoCalculate() {
   const btn = document.getElementById('auto-calc-btn');
   btn.innerHTML = '<span class="animate-spin inline-block">⟳</span> Calculating...';
   btn.disabled = true;
+  // Send the Section 7 scores currently on screen so they are saved before the totals are worked out
   const res = await fetch('{{ route("hr.appraisal.calculate", $appraisal) }}', {
-    method:'POST', headers:{'X-CSRF-TOKEN':window.csrfToken,'Accept':'application/json'}
+    method:'POST', headers:{'X-CSRF-TOKEN':window.csrfToken,'Accept':'application/json'},
+    body: new FormData(document.getElementById('hr-form'))
   });
+  if (!res.ok) {
+    alert('Could not calculate. Check that every Section 7 score is between 0 and 10.');
+    btn.innerHTML = '<i class="ti ti-calculator"></i> Auto-calculate totals';
+    btn.disabled = false;
+    return;
+  }
   const d = await res.json();
   ['s1','s2','s3','s4'].forEach((k,i) => {
     const el = document.getElementById(['staff_performance_s1_weighted','staff_performance_s2_weighted','staff_performance_s3_weighted','staff_performance_s4_weighted'][i]);
@@ -345,6 +384,21 @@ async function autoCalculate() {
   btn.innerHTML = '<i class="ti ti-calculator"></i> Auto-calculate totals';
   btn.disabled = false;
 }
+
+// Live Section 7 totals while HR types
+(function () {
+  const summary = {{ (int) $sec7SummarySum }};
+  const inputs = document.querySelectorAll('[data-sec7-score]');
+  const compliance = document.getElementById('sec7-compliance-total');
+  const grand = document.getElementById('sec7-grand-total');
+  function update() {
+    let sum = 0;
+    inputs.forEach(i => { sum += Math.min(10, Math.max(0, parseFloat(i.value) || 0)); });
+    if (compliance) compliance.textContent = sum;
+    if (grand) grand.textContent = sum + summary;
+  }
+  inputs.forEach(i => i.addEventListener('input', update));
+})();
 
 async function aiComment() {
   const btn = event.target.closest('button');

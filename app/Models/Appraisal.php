@@ -14,12 +14,17 @@ class Appraisal extends Model
         'staff_performance_s1_weighted','staff_performance_s2_weighted','staff_performance_s3_weighted','staff_performance_s4_weighted',
         'staff_performance_overall','staff_performance_grade','staff_performance_comments',
         'submitted_at','forwarded_at','approved_at',
+        // Section 7 extras (see migration add_section7_extras_to_appraisals_table)
+        'section7_misconduct',
+        'overall_contribution_score','key_strengths_score','areas_for_improvement_score',
+        'total_score','total_score_comment',
     ];
 
     protected $casts = [
         'section5'             => 'array',
         'section6'             => 'array',
         'section7_items'       => 'array',
+        'section7_misconduct'  => 'array',
         'supervisor_confirmed' => 'boolean',
         'submitted_at'         => 'datetime',
         'forwarded_at'         => 'datetime',
@@ -110,7 +115,13 @@ class Appraisal extends Model
         $s1      = $this->calcWeighted($this->kras->toArray(), 35);
         $s2      = $this->calcWeighted($this->tasks->toArray(), 25);
         $s3      = $this->calcWeighted($this->innovations->toArray(), 20);
+        // Section 7 = the five policy rows plus the misconduct row, each out of 10 (max 60)
         $s7total = collect($this->section7_items)->sum('score');
+        $misc    = $this->section7_misconduct;
+        if (is_string($misc)) {
+            $misc = json_decode($misc, true);
+        }
+        $s7total += (float) (is_array($misc) ? ($misc['score'] ?? 0) : 0);
         $s4      = round(($s7total / 60) * 20, 2);
         $overall = round(($s1 ?? 0) + ($s2 ?? 0) + ($s3 ?? 0) + $s4, 2);
         $grade   = $this->getGrade($overall);

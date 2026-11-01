@@ -513,6 +513,7 @@ class TaskLogController extends Controller
     // appraisal (hr.appraisal.show) for the selected cycle.
     // The month bar lets HR jump to any previous cycle; $pendingByCycle
     // flags the months that still have logs awaiting review.
+    // The bell in the header lists $submittedAppraisals (every submitted appraisal).
     // -------------------------------------------------------
     public function hrSupervisor(Request $request, string $supervisor)
     {
@@ -562,8 +563,17 @@ class TaskLogController extends Controller
             ->groupBy('cycle_id')
             ->pluck('total', 'cycle_id');
 
+        // Notification bell: the most recent appraisals that staff have submitted,
+        // across all supervisors and cycles.
+        $submittedAppraisals = Appraisal::with(['staff', 'cycle'])
+            ->whereNotNull('submitted_at')
+            ->orderByDesc('submitted_at')
+            ->limit(30)
+            ->get();
+
         return view('staff_performance.tasks_supervisor', compact(
-            'cycle', 'cycles', 'supervisorUser', 'team', 'tasks', 'appraisalsByStaff', 'pendingByCycle'
+            'cycle', 'cycles', 'supervisorUser', 'team', 'tasks', 'appraisalsByStaff', 'pendingByCycle',
+            'submittedAppraisals'
         ));
     }
 }

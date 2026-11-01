@@ -47,7 +47,12 @@ tailwind.config = {
 }
 </script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+
+{{-- Alpine.js (powers the HR notification bell) --}}
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
 <style>
+[x-cloak] { display: none !important; }
 body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-area-inset-top); }
 .score-input { width: 70px; text-align: center; }
 /* PWA install banner */
@@ -84,6 +89,19 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
     </div>
 </div>
 
+{{-- HR notification bell data (HR only): first paint + live refresh URL --}}
+@php
+    $hrBellItems = collect();
+    $hrBellUrl   = null;
+
+    if (auth()->user()->isHR()) {
+        $hrBellItems = \App\Http\Controllers\HrNotificationController::feed();
+        $hrBellUrl   = \Illuminate\Support\Facades\Route::has('hr.notifications.appraisals')
+            ? route('hr.notifications.appraisals')
+            : null;
+    }
+@endphp
+
 {{-- Topbar --}}
 <header class="topbar bg-[#3C3489] text-white h-14 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40 shadow-md">
     <div class="flex items-center gap-3 min-w-0">
@@ -109,6 +127,91 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
             class="hidden items-center gap-1.5 bg-white/10 border border-white/20 text-white text-xs px-2.5 py-1.5 rounded-lg hover:bg-white/20 transition">
             <i class="ti ti-download text-sm"></i> <span class="hidden sm:inline">Install app</span>
         </button>
+
+        {{-- HR notification bell: submitted appraisals (refreshes every 30s) --}}
+        @if(auth()->user()->isHR())
+        <div class="sm:relative"
+             x-data="{
+               open: false,
+               items: @js($hrBellItems),
+               url: @js($hrBellUrl),
+               lastSeen: 0,
+               init() {
+                 try { this.lastSeen = parseInt(localStorage.getItem('hr_appraisal_seen') || '0', 10) || 0; } catch (e) {}
+                 if (this.url) {
+                   setInterval(() => this.refresh(), 30000);
+                   document.addEventListener('visibilitychange', () => { if (!document.hidden) this.refresh(); });
+                 }
+               },
+               async refresh() {
+                 try {
+                   const res = await fetch(this.url, {
+                     headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                     credentials: 'same-origin'
+                   });
+                   if (!res.ok) return;
+                   const data = await res.json();
+                   this.items = data.items || [];
+                 } catch (e) {}
+               },
+               get unread() { return this.items.filter(i => i.ts > this.lastSeen).length },
+               isNew(i) { return i.ts > this.lastSeen },
+               markAllRead() {
+                 const max = this.items.reduce((m, i) => Math.max(m, i.ts), 0);
+                 this.lastSeen = max || Math.floor(Date.now() / 1000);
+                 try { localStorage.setItem('hr_appraisal_seen', String(this.lastSeen)); } catch (e) {}
+               }
+             }"
+             @click.outside="open = false"
+             @keydown.escape.window="open = false">
+
+            <button type="button" @click="open = !open" aria-label="Appraisal notifications" :aria-expanded="open"
+                    class="relative w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition">
+                <i class="ti ti-bell text-lg"></i>
+                <span x-show="unread > 0" x-cloak x-text="unread > 9 ? '9+' : unread"
+                      class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center"></span>
+            </button>
+
+            <div x-show="open" x-cloak x-transition.opacity
+                 class="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full sm:mt-2 sm:w-80 bg-white text-gray-800 border border-[#e0daf5] rounded-xl shadow-xl z-50 overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-[#e0daf5]">
+                    <div class="text-sm font-semibold">
+                        Submitted appraisals
+                        <span class="ml-1 text-[11px] font-normal text-gray-400" x-text="'(' + items.length + ')'"></span>
+                    </div>
+                    <button type="button" x-show="unread > 0" @click="markAllRead()" class="text-xs text-[#3C3489] hover:underline">Mark all read</button>
+                </div>
+
+                <div class="max-h-96 overflow-y-auto divide-y divide-[#f1eefb]">
+                    <template x-for="i in items" :key="i.id">
+                        <a :href="i.url" class="flex items-start gap-3 px-4 py-3 hover:bg-[#f5f0ff] transition" :class="isNew(i) ? 'bg-[#faf8ff]' : ''">
+                            <div class="w-9 h-9 rounded-full bg-[#eeedfe] text-[#3C3489] flex items-center justify-center shrink-0">
+                                <i class="ti ti-file-check text-lg"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-sm text-gray-800 truncate">
+                                    <span class="font-semibold" x-text="i.name"></span> submitted an appraisal
+                                </div>
+                                <div class="text-xs text-gray-500 truncate" x-show="i.meta" x-text="i.meta"></div>
+                                <div class="text-[11px] text-gray-400 mt-0.5">
+                                    <span x-show="i.cycle" x-text="i.cycle"></span>
+                                    <span x-show="i.cycle && i.ago"> · </span>
+                                    <span x-text="i.ago"></span>
+                                </div>
+                            </div>
+                            <span x-show="isNew(i)" class="mt-1.5 w-2 h-2 rounded-full bg-[#7F77DD] shrink-0"></span>
+                        </a>
+                    </template>
+
+                    <div x-show="items.length === 0" class="px-4 py-8 text-center text-sm text-gray-400">
+                        <i class="ti ti-bell-off text-2xl block mb-1"></i>
+                        No submitted appraisals yet.
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
         <div class="w-8 h-8 bg-[#7F77DD] rounded-full flex items-center justify-center text-xs font-bold cursor-default flex-shrink-0">
             {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}{{ strtoupper(substr(explode(' ', auth()->user()->name)[1] ?? '', 0, 1)) }}
         </div>

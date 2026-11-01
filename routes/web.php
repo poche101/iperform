@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\ChangePasswordController;
 use App\Http\Controllers\AppraisalCommentController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\HrNotificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -110,6 +111,11 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::post('/cycles', [StaffPerformanceController::class, 'storeCycle'])->name('cycles.store');
     Route::patch('/cycles/{cycle}/extend', [StaffPerformanceController::class, 'extendCycle'])->name('cycles.extend');
     Route::delete('/cycles/{cycle}', [StaffPerformanceController::class, 'destroyCycle'])->name('cycles.destroy');
+
+    // HR bell: live feed of submitted appraisals (full name: hr.notifications.appraisals)
+    Route::get('/notifications/appraisals', [HrNotificationController::class, 'appraisals'])
+        ->name('notifications.appraisals');
+
     // Task logs: supervisor list, then one supervisor's staff and their logs ("none" = staff with no supervisor)
     Route::get('/tasks', [TaskLogController::class, 'hrIndex'])->name('tasks');
     Route::get('/tasks/supervisor/{supervisor}', [TaskLogController::class, 'hrSupervisor'])
