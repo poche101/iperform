@@ -81,6 +81,24 @@
   $appraisal = $appraisalsByStaff->get($s->id);
   $logs      = $tasks->get($s->id, collect());
   $initials  = collect(explode(' ', trim($s->name)))->filter()->take(2)->map(fn ($p) => strtoupper(mb_substr($p, 0, 1)))->implode('');
+
+  // Has the supervisor graded this appraisal? Based on the scores actually saved on its rows,
+  // plus whether it has been forwarded to Staff Performance.
+  $review = null;
+  if ($appraisal && $appraisal->status !== 'drafting') {
+      $rows   = collect([$appraisal->kras, $appraisal->tasks, $appraisal->innovations, $appraisal->competencies])->flatten(1);
+      $total  = $rows->count();
+      $scored = $rows->filter(fn ($r) => $r->supervisor_score !== null)->count();
+      $fwd    = $appraisal->forwarded_at !== null || in_array($appraisal->status, ['with_staff_performance', 'approved'], true);
+
+      if ($fwd) {
+          $review = ['Graded · forwarded', 'bg-green-100 text-green-700', 'ti-circle-check'];
+      } elseif ($scored > 0) {
+          $review = ["Grading {$scored}/{$total}", 'bg-amber-100 text-amber-700', 'ti-progress'];
+      } else {
+          $review = ['Not graded yet', 'bg-red-100 text-red-600', 'ti-clock'];
+      }
+  }
 @endphp
 <a href="{{ $appraisal ? route('hr.appraisal.show', $appraisal) : '#' }}"
    @if(!$appraisal) aria-disabled="true" @endif
@@ -97,7 +115,12 @@
   </div>
   <div class="flex items-center gap-2 flex-wrap mt-4">
     @if($appraisal)
-      <span class="text-[11px] bg-[#dddafe] text-[#534AB7] px-2 py-0.5 rounded-full">{{ ucfirst($appraisal->status) }}</span>
+      <span class="text-[11px] bg-[#dddafe] text-[#534AB7] px-2 py-0.5 rounded-full">{{ ucfirst(str_replace('_', ' ', $appraisal->status)) }}</span>
+      @if($review)
+        <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full {{ $review[1] }}" title="Supervisor grading status">
+          <i class="ti {{ $review[2] }} text-xs"></i> {{ $review[0] }}
+        </span>
+      @endif
       <span class="text-[11px] bg-[#eeedfe] text-[#3C3489] px-2 py-0.5 rounded-full">{{ $logs->count() }} {{ Str::plural('log', $logs->count()) }}</span>
       @if(($n = $logs->where('status', 'awaiting')->count()) > 0)
         <span class="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{{ $n }} awaiting</span>
