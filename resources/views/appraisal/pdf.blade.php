@@ -345,24 +345,24 @@ td { padding: 5px 8px; border: 0.5px solid #e0daf5; vertical-align: top; }
       <table style="margin-bottom:10px;">
         <tr>
           <td style="width:70%; color:#888780">Section 1 — Major Targets & KRA (35 marks)</td>
-          <td style="width:30%; font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->hr_s1_weighted ?? '—' }}</td>
+          <td style="width:30%; font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->staff_performance_s1_weighted ?? '—' }}</td>
         </tr>
         <tr>
           <td style="color:#888780">Section 2 — Routines, Other Tasks (25 marks)</td>
-          <td style="font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->hr_s2_weighted ?? '—' }}</td>
+          <td style="font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->staff_performance_s2_weighted ?? '—' }}</td>
         </tr>
         <tr>
           <td style="color:#888780">Section 3 — Ideas, Innovations & Outstanding Contributions (20 marks)</td>
-          <td style="font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->hr_s3_weighted ?? '—' }}</td>
+          <td style="font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->staff_performance_s3_weighted ?? '—' }}</td>
         </tr>
         <tr>
           <td style="color:#888780">Section 4 — Compliance to Administrative Policy (20 marks)</td>
-          <td style="font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->hr_s4_weighted ?? '—' }}</td>
+          <td style="font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->staff_performance_s4_weighted ?? '—' }}</td>
         </tr>
         <tr style="border-top:2px solid #3C3489;">
           <td style="font-weight:bold; font-size:12px; padding-top:6px">Overall Performance Score</td>
           <td style="text-align:right; padding-top:6px">
-            <span style="font-size:28px; font-weight:bold; color:#3C3489;">{{ $appraisal->hr_overall ?? '—' }}</span>
+            <span style="font-size:28px; font-weight:bold; color:#3C3489;">{{ $appraisal->staff_performance_overall ?? '—' }}</span>
           </td>
         </tr>
       </table>
@@ -375,14 +375,14 @@ td { padding: 5px 8px; border: 0.5px solid #e0daf5; vertical-align: top; }
         </div>
         <div style="display:table-cell; width:30%; text-align:center; vertical-align:middle;">
           <div style="font-size:9px; color:#888780; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Appraisal Grade</div>
-          <div style="font-size:48px; font-weight:bold; color:#3C3489; line-height:1;">{{ $appraisal->hr_grade ?? '—' }}</div>
+          <div style="font-size:48px; font-weight:bold; color:#3C3489; line-height:1;">{{ $appraisal->staff_performance_grade ?? '—' }}</div>
         </div>
       </div>
 
-      @if($appraisal->hr_comments)
+      @if($appraisal->staff_performance_comments)
       <div class="hr-comments">
         <div class="hr-comments-label">Performance Management / HR Comments</div>
-        <div class="hr-comments-text">{{ $appraisal->hr_comments }}</div>
+        <div class="hr-comments-text">{{ $appraisal->staff_performance_comments }}</div>
       </div>
       @endif
     </div>

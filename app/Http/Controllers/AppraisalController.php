@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 class AppraisalController extends Controller
 {
@@ -253,6 +254,24 @@ class AppraisalController extends Controller
             'supervisor_comments' => $request->input('supervisor_comments'),
         ]);
 
+        // Section 7 extras: misconduct row, summary scores, total and its comment
+        $extras = [];
+        if ($request->has('section7_misconduct')) {
+            $extras['section7_misconduct'] = [
+                'score'   => (float) $request->input('section7_misconduct.score', 0),
+                'comment' => (string) $request->input('section7_misconduct.comment', ''),
+            ];
+        }
+        foreach (['overall_contribution_score', 'key_strengths_score', 'areas_for_improvement_score', 'total_score'] as $field) {
+            if ($request->has($field)) {
+                $extras[$field] = $request->input($field) === '' ? null : $request->input($field);
+            }
+        }
+        if ($request->has('total_score_comment')) {
+            $extras['total_score_comment'] = $request->input('total_score_comment');
+        }
+        $this->updateIfColumns($appraisal, $extras);
+
         return back()->with('success', 'Grades saved.');
     }
 
@@ -313,10 +332,72 @@ class AppraisalController extends Controller
         return view('appraisal.hr-history', compact('appraisals', 'departments'));
     }
 
-    /** HR (Staff Performance): auto-calculate totals */
-    public function hrAutoCalculate(Appraisal $appraisal)
+    /**
+     * HR (Staff Performance): save the Section 7 scores/comments entered on the review form.
+     * Policies are stored in section7_items keyed by slug (same shape the supervisor form uses);
+     * misconduct and the total comment go in their own columns when those columns exist.
+     */
+    private function saveSection7(Request $request, Appraisal $appraisal): void
+    {
+        if (!$request->has('section7') && !$request->has('section7_misconduct') && !$request->has('total_score_comment')) {
+            return;
+        }
+
+        $request->validate([
+            'section7'                      => 'nullable|array',
+            'section7.*.score'              => 'nullable|numeric|min:0|max:10',
+            'section7.*.comment'            => 'nullable|string|max:1000',
+            'section7_misconduct.score'     => 'nullable|numeric|min:0|max:10',
+            'section7_misconduct.comment'   => 'nullable|string|max:1000',
+            'total_score_comment'           => 'nullable|string|max:1000',
+        ]);
+
+        $keys  = ['attendance', 'chapel', 'punctuality', 'reports', 'participation'];
+        // Keep only slug-keyed entries (drops the numeric default rows the model returns when nothing is saved yet)
+        $saved = is_array($appraisal->section7_items) ? array_intersect_key($appraisal->section7_items, array_flip($keys)) : [];
+
+        foreach ($keys as $key) {
+            if (!$request->has("section7.$key")) {
+                continue;
+            }
+            $score = $request->input("section7.$key.score");
+            $saved[$key] = [
+                'score'   => ($score === null || $score === '') ? null : (float) $score,
+                'comment' => (string) $request->input("section7.$key.comment", ''),
+            ];
+        }
+
+        $appraisal->section7_items = $saved;
+        $appraisal->save();
+
+        $extras = [];
+        if ($request->has('section7_misconduct')) {
+            $score = $request->input('section7_misconduct.score');
+            $extras['section7_misconduct'] = [
+                'score'   => ($score === null || $score === '') ? 0 : (float) $score,
+                'comment' => (string) $request->input('section7_misconduct.comment', ''),
+            ];
+        }
+        if ($request->has('total_score_comment')) {
+            $extras['total_score_comment'] = $request->input('total_score_comment');
+        }
+        $this->updateIfColumns($appraisal, $extras);
+    }
+
+    /** Update only the columns that exist in the database, so a not-yet-run migration never breaks a save. */
+    private function updateIfColumns(Appraisal $appraisal, array $data): void
+    {
+        $data = array_filter($data, fn ($v, $col) => Schema::hasColumn('appraisals', $col), ARRAY_FILTER_USE_BOTH);
+        if ($data) {
+            $appraisal->update($data);
+        }
+    }
+
+    /** HR (Staff Performance): auto-calculate totals (saves any Section 7 scores sent with the request first) */
+    public function hrAutoCalculate(Request $request, Appraisal $appraisal)
     {
         abort_unless(Auth::user()->isStaffPerformance(), 403);
+        $this->saveSection7($request, $appraisal);
         $appraisal->load(['kras','tasks','innovations']);
         $appraisal->autoCalculate();
         return response()->json([
@@ -333,6 +414,7 @@ class AppraisalController extends Controller
     public function hrApprove(Request $request, Appraisal $appraisal)
     {
         abort_unless(Auth::user()->isStaffPerformance(), 403);
+        $this->saveSection7($request, $appraisal);
         $appraisal->update([
             'staff_performance_s1_weighted' => $request->input('staff_performance_s1_weighted'),
             'staff_performance_s2_weighted' => $request->input('staff_performance_s2_weighted'),

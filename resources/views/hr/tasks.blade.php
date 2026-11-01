@@ -19,6 +19,41 @@
   $idx       = $cycle ? $cycleList->search(fn ($c) => $c->id === $cycle->id) : false;
   $newer     = ($idx !== false && $idx > 0) ? $cycleList[$idx - 1] : null;
   $older     = ($idx !== false && $idx < $cycleList->count() - 1) ? $cycleList[$idx + 1] : null;
+
+  // ---- Notification bell: staff who have submitted appraisals ----
+  // Preferred: controller passes $submittedAppraisals (all submitted appraisals, newest first,
+  //            with ->staff and ->cycle loaded, ideally ->submitted_at).
+  // Fallback:  uses the appraisals already loaded for this supervisor's team.
+  if (isset($submittedAppraisals)) {
+      $notifSource = collect($submittedAppraisals)->map(fn ($a) => [
+          'appraisal' => $a,
+          'staff'     => $a->staff ?? null,
+          'cycleName' => $a->cycle->name ?? null,
+      ]);
+  } else {
+      $notifSource = $appraisalsByStaff
+          ->filter(fn ($a) => strtolower((string) $a->status) === 'submitted')
+          ->map(fn ($a, $staffId) => [
+              'appraisal' => $a,
+              'staff'     => $team->firstWhere('id', $staffId),
+              'cycleName' => $cycle?->name,
+          ])->values();
+  }
+
+  $notifications = $notifSource->map(function ($row) {
+      $a  = $row['appraisal'];
+      $st = $row['staff'];
+      $at = $a->submitted_at ?? $a->updated_at ?? null;
+      return [
+          'id'    => $a->id,
+          'name'  => $st->name ?? 'Unknown staff',
+          'meta'  => trim(($st->department ?? '') . (($st->department ?? null) && ($st->designation ?? null) ? ' · ' : '') . ($st->designation ?? '')),
+          'cycle' => $row['cycleName'],
+          'ago'   => $at ? \Illuminate\Support\Carbon::parse($at)->diffForHumans() : '',
+          'ts'    => $at ? \Illuminate\Support\Carbon::parse($at)->timestamp : 0,
+          'url'   => route('hr.appraisal.show', $a),
+      ];
+  })->sortByDesc('ts')->values();
 @endphp
 
 <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
@@ -28,9 +63,76 @@
       {{ $cycle?->name ?? 'No cycle' }} · {{ $team->count() }} {{ Str::plural('staff', $team->count()) }} · Select a staff member to open their appraisal
     </div>
   </div>
-  <a href="{{ route('hr.tasks', ['cycle' => $cycle?->id]) }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
-    <i class="ti ti-arrow-left"></i> Back
-  </a>
+
+  <div class="flex items-center gap-2">
+    {{-- Notification bell --}}
+    <div class="relative"
+         x-data="{
+           open: false,
+           items: @js($notifications),
+           lastSeen: 0,
+           init() { try { this.lastSeen = parseInt(localStorage.getItem('hr_appraisal_seen') || '0', 10); } catch (e) {} },
+           get unread() { return this.items.filter(i => i.ts > this.lastSeen).length },
+           isNew(i) { return i.ts > this.lastSeen },
+           toggle() { this.open = !this.open },
+           markAllRead() {
+             const max = this.items.reduce((m, i) => Math.max(m, i.ts), 0);
+             this.lastSeen = max || Math.floor(Date.now() / 1000);
+             try { localStorage.setItem('hr_appraisal_seen', String(this.lastSeen)); } catch (e) {}
+           }
+         }"
+         @click.outside="open = false"
+         @keydown.escape.window="open = false">
+      <button type="button" @click="toggle()" aria-label="Appraisal notifications" :aria-expanded="open"
+              class="relative w-10 h-10 flex items-center justify-center rounded-lg border border-[#e0daf5] bg-white text-gray-500 hover:border-[#7F77DD] hover:text-[#3C3489] transition">
+        <i class="ti ti-bell text-xl"></i>
+        <span x-show="unread > 0" x-cloak x-text="unread > 9 ? '9+' : unread"
+              class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center"></span>
+      </button>
+
+      <div x-show="open" x-cloak x-transition.origin.top.right
+           class="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border border-[#e0daf5] rounded-xl shadow-lg z-50 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-[#e0daf5]">
+          <div class="text-sm font-semibold text-gray-800">
+            Submitted appraisals
+            <span class="ml-1 text-[11px] font-normal text-gray-400" x-text="'(' + items.length + ')'"></span>
+          </div>
+          <button type="button" x-show="unread > 0" @click="markAllRead()" class="text-xs text-[#3C3489] hover:underline">Mark all read</button>
+        </div>
+
+        <div class="max-h-96 overflow-y-auto divide-y divide-[#f1eefb]">
+          <template x-for="i in items" :key="i.id">
+            <a :href="i.url" class="flex items-start gap-3 px-4 py-3 hover:bg-[#f5f0ff] transition" :class="isNew(i) ? 'bg-[#faf8ff]' : ''">
+              <div class="w-9 h-9 rounded-full bg-[#eeedfe] text-[#3C3489] flex items-center justify-center shrink-0">
+                <i class="ti ti-file-check text-lg"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-sm text-gray-800 truncate">
+                  <span class="font-semibold" x-text="i.name"></span> submitted an appraisal
+                </div>
+                <div class="text-xs text-gray-500 truncate" x-show="i.meta" x-text="i.meta"></div>
+                <div class="text-[11px] text-gray-400 mt-0.5">
+                  <span x-show="i.cycle" x-text="i.cycle"></span>
+                  <span x-show="i.cycle && i.ago"> · </span>
+                  <span x-text="i.ago"></span>
+                </div>
+              </div>
+              <span x-show="isNew(i)" class="mt-1.5 w-2 h-2 rounded-full bg-[#7F77DD] shrink-0"></span>
+            </a>
+          </template>
+
+          <div x-show="items.length === 0" class="px-4 py-8 text-center text-sm text-gray-400">
+            <i class="ti ti-bell-off text-2xl block mb-1"></i>
+            No submitted appraisals yet.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <a href="{{ route('hr.tasks', ['cycle' => $cycle?->id]) }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
+      <i class="ti ti-arrow-left"></i> Back
+    </a>
+  </div>
 </div>
 
 {{-- Month switcher --}}

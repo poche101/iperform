@@ -10,28 +10,67 @@
 @endsection
 
 @section('content')
-<div class="flex items-center justify-between gap-3 flex-wrap mb-5">
+@php
+  $supParam       = $supervisorUser?->id ?? 'none';
+  $pendingByCycle = $pendingByCycle ?? collect();
+
+  // $cycles is newest first, so "previous month" is the next item in the list
+  $cycleList = $cycles->values();
+  $idx       = $cycle ? $cycleList->search(fn ($c) => $c->id === $cycle->id) : false;
+  $newer     = ($idx !== false && $idx > 0) ? $cycleList[$idx - 1] : null;
+  $older     = ($idx !== false && $idx < $cycleList->count() - 1) ? $cycleList[$idx + 1] : null;
+@endphp
+
+<div class="flex items-center justify-between gap-3 flex-wrap mb-4">
   <div>
     <div class="text-xl font-bold text-gray-800">{{ $supervisorUser?->name ?? 'No supervisor assigned' }}</div>
     <div class="text-sm text-gray-500">
       {{ $cycle?->name ?? 'No cycle' }} · {{ $team->count() }} {{ Str::plural('staff', $team->count()) }} · Select a staff member to open their appraisal
     </div>
   </div>
-  <div class="flex items-center gap-2">
-    @if($cycles->count() > 1)
-    <form method="GET" action="{{ route('hr.tasks.supervisor', $supervisorUser?->id ?? 'none') }}">
-      <select name="cycle" onchange="this.form.submit()" class="border border-[#e0daf5] rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7F77DD]">
-        @foreach($cycles as $c)
-        <option value="{{ $c->id }}" @selected($cycle && $cycle->id === $c->id)>{{ $c->name }}{{ $c->is_active ? ' (active)' : '' }}</option>
-        @endforeach
-      </select>
-    </form>
-    @endif
-    <a href="{{ route('hr.tasks', ['cycle' => $cycle?->id]) }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
-      <i class="ti ti-arrow-left"></i> Back
-    </a>
-  </div>
+  <a href="{{ route('hr.tasks', ['cycle' => $cycle?->id]) }}" class="inline-flex items-center gap-2 border border-[#e0daf5] text-gray-500 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
+    <i class="ti ti-arrow-left"></i> Back
+  </a>
 </div>
+
+{{-- Month switcher --}}
+@if($cycleList->count() > 0)
+<div class="flex items-center gap-2 mb-5">
+  @if($older)
+  <a href="{{ route('hr.tasks.supervisor', [$supParam, 'cycle' => $older->id]) }}" title="Previous: {{ $older->name }}"
+     class="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-[#e0daf5] bg-white text-gray-500 hover:border-[#7F77DD] hover:text-[#3C3489] transition">
+    <i class="ti ti-chevron-left"></i>
+  </a>
+  @else
+  <span class="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-[#e0daf5] bg-white text-gray-300"><i class="ti ti-chevron-left"></i></span>
+  @endif
+
+  <div class="flex items-center gap-2 overflow-x-auto py-1 flex-1">
+    @foreach($cycleList as $c)
+    @php
+      $isCurrent = $cycle && $cycle->id === $c->id;
+      $pending   = $pendingByCycle->get($c->id, 0);
+    @endphp
+    <a href="{{ route('hr.tasks.supervisor', [$supParam, 'cycle' => $c->id]) }}"
+       @if($isCurrent) aria-current="page" @endif
+       class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm border transition {{ $isCurrent ? 'bg-[#3C3489] text-white border-[#3C3489] font-medium' : 'bg-white text-gray-600 border-[#e0daf5] hover:border-[#7F77DD] hover:text-[#3C3489]' }}">
+      {{ $c->name }}
+      @if($c->is_active)<span class="text-[10px] px-1.5 py-0.5 rounded-full {{ $isCurrent ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700' }}">active</span>@endif
+      @if($pending > 0)<span class="text-[10px] px-1.5 py-0.5 rounded-full {{ $isCurrent ? 'bg-amber-300 text-amber-900' : 'bg-amber-100 text-amber-700' }}" title="{{ $pending }} awaiting review">{{ $pending }}</span>@endif
+    </a>
+    @endforeach
+  </div>
+
+  @if($newer)
+  <a href="{{ route('hr.tasks.supervisor', [$supParam, 'cycle' => $newer->id]) }}" title="Next: {{ $newer->name }}"
+     class="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-[#e0daf5] bg-white text-gray-500 hover:border-[#7F77DD] hover:text-[#3C3489] transition">
+    <i class="ti ti-chevron-right"></i>
+  </a>
+  @else
+  <span class="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-[#e0daf5] bg-white text-gray-300"><i class="ti ti-chevron-right"></i></span>
+  @endif
+</div>
+@endif
 
 @if(!$cycle)
 <div class="bg-white border border-[#e0daf5] rounded-xl p-8 text-center text-gray-400">There is no appraisal cycle yet.</div>
