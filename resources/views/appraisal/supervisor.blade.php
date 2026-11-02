@@ -156,6 +156,9 @@
   </div>
 </div>
 
+{{-- Final result from Staff Performance (shown once approved) --}}
+@include('appraisal.partials.performance-result')
+
 {{-- Section 1: KRAs --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden mb-4">
   <div class="bg-[#eeedfe] px-5 py-3 flex items-center justify-between">

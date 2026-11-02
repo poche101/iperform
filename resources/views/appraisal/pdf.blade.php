@@ -328,6 +328,8 @@ td { padding: 5px 8px; border: 0.5px solid #e0daf5; vertical-align: top; }
     @endif
   </div>
 
+  {{-- Staff Performance summary: HR always sees it; staff and supervisors only once it is approved --}}
+  @if(auth()->user()->isStaffPerformance() || $appraisal->status === 'approved')
   {{-- HR Summary --}}
   <div class="hr-box">
     <div class="hr-box-header">
@@ -387,6 +389,8 @@ td { padding: 5px 8px; border: 0.5px solid #e0daf5; vertical-align: top; }
       @endif
     </div>
   </div>
+
+  @endif
 
   {{-- Signature Section --}}
   <div class="sig-section">

@@ -128,11 +128,12 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
             <i class="ti ti-download text-sm"></i> <span class="hidden sm:inline">Install app</span>
         </button>
 
-        {{-- HR notification bell: submitted appraisals (refreshes every 30s) --}}
+        {{-- HR notification bell: submitted + graded appraisals (refreshes every 30s) --}}
         @if(auth()->user()->isHR())
         <div class="sm:relative"
              x-data="{
                open: false,
+               tab: 'all',
                items: @js($hrBellItems),
                url: @js($hrBellUrl),
                lastSeen: 0,
@@ -154,6 +155,8 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
                    this.items = data.items || [];
                  } catch (e) {}
                },
+               get shown() { return this.tab === 'all' ? this.items : this.items.filter(i => i.type === this.tab) },
+               count(t) { return t === 'all' ? this.items.length : this.items.filter(i => i.type === t).length },
                get unread() { return this.items.filter(i => i.ts > this.lastSeen).length },
                isNew(i) { return i.ts > this.lastSeen },
                markAllRead() {
@@ -173,26 +176,42 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
             </button>
 
             <div x-show="open" x-cloak x-transition.opacity
-                 class="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full sm:mt-2 sm:w-80 bg-white text-gray-800 border border-[#e0daf5] rounded-xl shadow-xl z-50 overflow-hidden">
+                 class="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full sm:mt-2 sm:w-96 bg-white text-gray-800 border border-[#e0daf5] rounded-xl shadow-xl z-50 overflow-hidden">
                 <div class="flex items-center justify-between px-4 py-3 border-b border-[#e0daf5]">
-                    <div class="text-sm font-semibold">
-                        Submitted appraisals
-                        <span class="ml-1 text-[11px] font-normal text-gray-400" x-text="'(' + items.length + ')'"></span>
-                    </div>
+                    <div class="text-sm font-semibold">Appraisal activity</div>
                     <button type="button" x-show="unread > 0" @click="markAllRead()" class="text-xs text-[#3C3489] hover:underline">Mark all read</button>
                 </div>
 
+                {{-- Filter tabs --}}
+                <div class="flex gap-1 px-3 py-2 border-b border-[#f1eefb] bg-[#faf8ff]">
+                    <template x-for="t in [['all','All'],['submitted','Submitted'],['graded','Graded']]" :key="t[0]">
+                        <button type="button" @click="tab = t[0]"
+                                class="px-3 py-1 rounded-full text-xs transition"
+                                :class="tab === t[0] ? 'bg-[#3C3489] text-white font-medium' : 'text-gray-500 hover:bg-[#eeedfe]'">
+                            <span x-text="t[1]"></span>
+                            <span class="opacity-70" x-text="'(' + count(t[0]) + ')'"></span>
+                        </button>
+                    </template>
+                </div>
+
                 <div class="max-h-96 overflow-y-auto divide-y divide-[#f1eefb]">
-                    <template x-for="i in items" :key="i.id">
+                    <template x-for="i in shown" :key="i.key">
                         <a :href="i.url" class="flex items-start gap-3 px-4 py-3 hover:bg-[#f5f0ff] transition" :class="isNew(i) ? 'bg-[#faf8ff]' : ''">
-                            <div class="w-9 h-9 rounded-full bg-[#eeedfe] text-[#3C3489] flex items-center justify-center shrink-0">
-                                <i class="ti ti-file-check text-lg"></i>
+                            <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                                 :class="i.type === 'graded' ? 'bg-green-100 text-green-700' : 'bg-[#eeedfe] text-[#3C3489]'">
+                                <i class="ti text-lg" :class="i.type === 'graded' ? 'ti-circle-check' : 'ti-file-check'"></i>
                             </div>
                             <div class="min-w-0 flex-1">
                                 <div class="text-sm text-gray-800 truncate">
-                                    <span class="font-semibold" x-text="i.name"></span> submitted an appraisal
+                                    <template x-if="i.type === 'graded'">
+                                        <span><span class="font-semibold" x-text="i.name"></span>'s appraisal was graded</span>
+                                    </template>
+                                    <template x-if="i.type !== 'graded'">
+                                        <span><span class="font-semibold" x-text="i.name"></span> submitted an appraisal</span>
+                                    </template>
                                 </div>
-                                <div class="text-xs text-gray-500 truncate" x-show="i.meta" x-text="i.meta"></div>
+                                <div class="text-xs text-gray-500 truncate" x-show="i.type === 'graded' && i.by" x-text="'Graded by ' + i.by"></div>
+                                <div class="text-xs text-gray-500 truncate" x-show="i.type !== 'graded' && i.meta" x-text="i.meta"></div>
                                 <div class="text-[11px] text-gray-400 mt-0.5">
                                     <span x-show="i.cycle" x-text="i.cycle"></span>
                                     <span x-show="i.cycle && i.ago"> · </span>
@@ -203,11 +222,16 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
                         </a>
                     </template>
 
-                    <div x-show="items.length === 0" class="px-4 py-8 text-center text-sm text-gray-400">
+                    <div x-show="shown.length === 0" class="px-4 py-8 text-center text-sm text-gray-400">
                         <i class="ti ti-bell-off text-2xl block mb-1"></i>
-                        No submitted appraisals yet.
+                        <span x-text="tab === 'graded' ? 'No graded appraisals yet.' : (tab === 'submitted' ? 'No submitted appraisals yet.' : 'No appraisal activity yet.')"></span>
                     </div>
                 </div>
+
+                <a href="{{ route('hr.appraisal.history') }}"
+                   class="block px-4 py-2.5 text-center text-xs font-medium text-[#3C3489] bg-[#faf8ff] border-t border-[#e0daf5] hover:bg-[#eeedfe] transition">
+                    View all appraisals <i class="ti ti-arrow-right align-middle"></i>
+                </a>
             </div>
         </div>
         @endif

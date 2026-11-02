@@ -77,8 +77,8 @@
     <div class="w-9 h-9 bg-[#eeedfe] rounded-lg flex items-center justify-center mb-2">
       <i class="ti ti-award text-[#3C3489] text-lg"></i>
     </div>
-    <div class="text-2xl font-bold text-gray-900">{{ $appraisal?->hr_grade ?? '—' }}</div>
-    <div class="text-xs text-gray-400 mt-0.5">Current grade</div>
+    <div class="text-2xl font-bold text-gray-900">{{ ($appraisal && $appraisal->status === 'approved') ? ($appraisal->staff_performance_grade ?? '—') : '—' }}</div>
+    <div class="text-xs text-gray-400 mt-0.5">{{ ($appraisal && $appraisal->status === 'approved') ? 'Final grade' : 'Grade (after approval)' }}</div>
   </div>
 </div>
 

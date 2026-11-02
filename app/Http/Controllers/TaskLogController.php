@@ -549,7 +549,8 @@ class TaskLogController extends Controller
         // Each staff member's appraisal for the selected cycle (if one exists yet),
         // so the view can link straight to hr.appraisal.show.
         $appraisalsByStaff = $cycle
-            ? Appraisal::whereIn('staff_id', $staffIds)
+            ? Appraisal::with(['kras', 'tasks', 'innovations', 'competencies'])
+                ->whereIn('staff_id', $staffIds)
                 ->where('cycle_id', $cycle->id)
                 ->get()
                 ->keyBy('staff_id')

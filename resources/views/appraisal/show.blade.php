@@ -42,7 +42,7 @@
     <div class="font-semibold text-[#3C3489] text-sm">Vital Information</div>
     <span class="text-[11px] px-2 py-0.5 rounded-full font-medium
       {{ $appraisal->status==='approved' ? 'bg-green-100 text-green-700'
-        : ($appraisal->status==='with_hr'  ? 'bg-orange-100 text-orange-700'
+        : ($appraisal->status==='with_staff_performance' ? 'bg-orange-100 text-orange-700'
         : ($appraisal->status==='submitted' ? 'bg-[#eeedfe] text-[#3C3489]'
         : 'bg-gray-100 text-gray-500')) }}">
       {{ ucfirst(str_replace('_',' ',$appraisal->status)) }}
@@ -57,6 +57,9 @@
     <div><span class="text-gray-400">Deadline:</span> {{ \Carbon\Carbon::parse($cycle->deadline)->format('d M Y') }}</div>
   </div>
 </div>
+
+{{-- Final result from Staff Performance (shown once approved) --}}
+@include('appraisal.partials.performance-result')
 
 {{-- SECTION 1: KRAs --}}
 <div class="bg-white border border-[#e0daf5] rounded-xl overflow-hidden mb-4">
