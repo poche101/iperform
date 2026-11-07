@@ -28,13 +28,20 @@ Route::post('/login/kingschat', [AuthController::class, 'kingsChatLogin'])
     ->middleware(['guest', 'throttle:10,1'])
     ->name('login.kingschat');
 
-// KingsChat OAuth popup landing page. KingsChat redirects the popup here after sign-in.
+// KingsChat OAuth landing page. KingsChat redirects here after sign-in.
 // Must stay public (no auth/guest middleware): the user is not logged in yet at this point.
+// DIAGNOSTIC VERSION: shows only the NAMES of the values received (never their contents).
 Route::get('/auth/kingschat/callback', function () {
-    return response(
-        '<!doctype html><meta charset="utf-8"><title>KingsChat</title>'
-        . '<p style="font-family:sans-serif;text-align:center;margin-top:20vh">Signing in…</p>'
-    );
+    return response(<<<'HTML'
+<!doctype html><meta charset="utf-8"><title>KingsChat</title>
+<p id="m" style="font-family:sans-serif;text-align:center;margin-top:20vh">Signing in…</p>
+<script>
+const p = new URLSearchParams(location.hash.slice(1) + "&" + location.search.slice(1));
+const names = [...p.keys()].filter(Boolean).join(", ") || "nothing";
+document.getElementById("m").textContent =
+  "Received: " + names + " | opener: " + (window.opener ? "yes" : "no");
+</script>
+HTML);
 })->name('kingschat.callback');
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
