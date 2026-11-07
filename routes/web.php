@@ -46,12 +46,18 @@ HTML);
 
 // KingsChat posts the authorization code here (redirect URL registered in the KingsChat portal, Form POST).
 // Public and CSRF-exempt because the request comes from KingsChat, not from our own pages.
-// TEMPORARY diagnostic: logs only the field NAMES received, never their values.
+// The CSRF middleware has had different class names across Laravel versions, so all of them are listed.
+// TEMPORARY diagnostic: logs the field NAMES and the origin label. The code itself is never logged.
 Route::post('/login/kingschat/callback', function (Request $request) {
-    \Log::info('KC callback fields: ' . implode(', ', array_keys($request->all())));
+    \Log::info('KC callback fields: ' . implode(', ', array_keys($request->all())) . ' | origin=' . $request->input('origin'));
     return redirect()->route('login');
 })
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])
+    ->withoutMiddleware([
+        'Illuminate\Foundation\Http\Middleware\ValidateCsrfToken',
+        'Illuminate\Foundation\Http\Middleware\PreventRequestForgery',
+        'Illuminate\Foundation\Http\Middleware\VerifyCsrfToken',
+        'App\Http\Middleware\VerifyCsrfToken',
+    ])
     ->middleware('throttle:30,1')
     ->name('kingschat.callback.post');
 

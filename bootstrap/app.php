@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // KingsChat posts the authorization code here from outside our site, so it can't carry a CSRF token.
+        $middleware->validateCsrfTokens(except: [
+            'login/kingschat/callback',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
