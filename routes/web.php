@@ -44,6 +44,17 @@ document.getElementById("m").textContent =
 HTML);
 })->name('kingschat.callback');
 
+// KingsChat posts the authorization code here (redirect URL registered in the KingsChat portal, Form POST).
+// Public and CSRF-exempt because the request comes from KingsChat, not from our own pages.
+// TEMPORARY diagnostic: logs only the field NAMES received, never their values.
+Route::post('/login/kingschat/callback', function (Request $request) {
+    \Log::info('KC callback fields: ' . implode(', ', array_keys($request->all())));
+    return redirect()->route('login');
+})
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('kingschat.callback.post');
+
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Forgot / reset password (guests, via emailed link)
