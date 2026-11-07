@@ -2,15 +2,24 @@
 
 namespace App\Services;
 
-use App\Models\KingsChatToken;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Sends KingsChat direct messages through the KingsChat Developer API, as the project.
+ *
+ *   POST https://connect.kingsch.at/developer/api/messages
+ *   Header: api-key: <project API key>      (no user access token needed)
+ *   Body:   { "recipient_id": "<profile.id>", "message": { "body": { "text": { "body": "..." } } } }
+ *
+ * The recipient must have authorized the project (signed in with KingsChat) or be in a
+ * direct chat with the project profile; otherwise KingsChat answers recipient_not_authorized.
+ * Never throws: a KingsChat problem must not break an appraisal action.
+ */
 class KingsChatMessenger
 {
-    private const BASE = 'https://connect.kingsch.at';
+    private const ENDPOINT = 'https://connect.kingsch.at/developer/api/messages';
 
     public function send(User $user, string $text): bool
     {
@@ -18,20 +27,27 @@ class KingsChatMessenger
             return false; // never signed in with KingsChat
         }
 
-        $token = $this->accessToken();
+        return $this->sendToId((string) $user->kc_user_id, $text, $user->id);
+    }
 
-        if (! $token) {
-            Log::warning('KingsChat: no usable sender token. Reconnect the sender account (HR > KingsChat).');
+    /** Send to a raw KingsChat user ID (also handy for tinker tests). */
+    public function sendToId(string $recipientId, string $text, ?int $userId = null): bool
+    {
+        $apiKey = config('services.kingschat.api_key');
+
+        if (! $apiKey) {
+            Log::warning('KingsChat: KINGSCHAT_API_KEY is not set in .env');
             return false;
         }
 
         try {
-            $res = Http::withToken($token)
+            $res = Http::withHeaders(['api-key' => $apiKey])
                 ->acceptJson()
                 ->asJson()
                 ->timeout(10)
-                ->post(self::BASE . "/api/users/{$user->kc_user_id}/new_message", [
-                    'message' => ['body' => ['text' => ['body' => $text]]],
+                ->post(self::ENDPOINT, [
+                    'recipient_id' => $recipientId,
+                    'message'      => ['body' => ['text' => ['body' => $text]]],
                 ]);
         } catch (\Throwable $e) {
             Log::warning('KingsChat send error: ' . $e->getMessage());
@@ -40,72 +56,14 @@ class KingsChatMessenger
 
         if ($res->failed()) {
             Log::warning('KingsChat send failed', [
-                'user'   => $user->id,
+                'user'   => $userId,
                 'status' => $res->status(),
+                'error'  => $res->json('error'),
                 'body'   => $res->body(),
             ]);
             return false;
         }
 
         return true;
-    }
-
-    private function accessToken(): ?string
-    {
-        $row = KingsChatToken::latest('id')->first();
-
-        if (! $row) {
-            return null;
-        }
-
-        if ($row->expires_at && $row->expires_at->copy()->subMinute()->isPast()) {
-            try {
-                $row = $this->refreshToken($row);
-            } catch (\Throwable $e) {
-                Log::warning('KingsChat token refresh error: ' . $e->getMessage());
-                return null;
-            }
-        }
-
-        return $row?->access_token;
-    }
-
-    private function refreshToken(KingsChatToken $row): ?KingsChatToken
-    {
-        // The lock stops two requests refreshing at once (refresh tokens may rotate)
-        return Cache::lock('kingschat-token-refresh', 15)->block(10, function () use ($row) {
-            $row->refresh(); // another request may have refreshed it already
-
-            if (! $row->expires_at || ! $row->expires_at->copy()->subMinute()->isPast()) {
-                return $row;
-            }
-
-            if (! $row->refresh_token) {
-                return null;
-            }
-
-            $res = Http::acceptJson()->asJson()->timeout(10)
-                ->post(self::BASE . '/oauth2/token', [
-                    'client_id'     => config('services.kingschat.client_id'),
-                    'grant_type'    => 'refresh_token',
-                    'refresh_token' => $row->refresh_token,
-                ]);
-
-            if ($res->failed() || ! $res->json('access_token')) {
-                Log::warning('KingsChat token refresh failed', [
-                    'status' => $res->status(),
-                    'body'   => $res->body(),
-                ]);
-                return null;
-            }
-
-            $row->update([
-                'access_token'  => $res->json('access_token'),
-                'refresh_token' => $res->json('refresh_token', $row->refresh_token),
-                'expires_at'    => now()->addMilliseconds((int) $res->json('expires_in_millis', 3600000)),
-            ]);
-
-            return $row;
-        });
     }
 }
