@@ -118,48 +118,48 @@ class StaffPerformanceController extends Controller
     }
 
     public function users(Request $request)
-{
-    $search  = $request->input('search');
-    $perPage = 10;
+    {
+        $search  = $request->input('search');
+        $perPage = 10;
 
-    $query = fn () => User::with('supervisor')
-        ->when($search, function ($q, $search) {
-            $q->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('username', 'like', "%{$search}%")
-                  ->orWhere('department', 'like', "%{$search}%");
-            });
-        })
-        ->orderBy('name');
+        $query = fn () => User::with('supervisor')
+            ->when($search, function ($q, $search) {
+                $q->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('username', 'like', "%{$search}%")
+                      ->orWhere('department', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name');
 
-    // "Load more" requests (fetched by JS) return just the next rows as JSON
-    if ($section = $request->input('section')) {
-        abort_unless(in_array($section, ['supervisors', 'staff'], true), 404);
+        // "Load more" requests (fetched by JS) return just the next rows as JSON
+        if ($section = $request->input('section')) {
+            abort_unless(in_array($section, ['supervisors', 'staff'], true), 404);
 
-        $page = $section === 'supervisors'
-            ? $query()->where('role', 'supervisor')->paginate($perPage, ['*'], 'sup_page')
-            : $query()->where('role', '!=', 'supervisor')->paginate($perPage, ['*'], 'staff_page');
+            $page = $section === 'supervisors'
+                ? $query()->where('role', 'supervisor')->paginate($perPage, ['*'], 'sup_page')
+                : $query()->where('role', '!=', 'supervisor')->paginate($perPage, ['*'], 'staff_page');
 
-        $page->withQueryString();
+            $page->withQueryString();
 
-        return response()->json([
-            'html'      => view('staff_performance._user_rows', ['rows' => $page])->render(),
-            'next'      => $page->nextPageUrl(),
-            'remaining' => max(0, $page->total() - $page->currentPage() * $page->perPage()),
-        ]);
+            return response()->json([
+                'html'      => view('staff_performance._user_rows', ['rows' => $page])->render(),
+                'next'      => $page->nextPageUrl(),
+                'remaining' => max(0, $page->total() - $page->currentPage() * $page->perPage()),
+            ]);
+        }
+
+        $supervisorUsers = $query()->where('role', 'supervisor')
+            ->paginate($perPage, ['*'], 'sup_page')->withQueryString();
+
+        $staffUsers = $query()->where('role', '!=', 'supervisor')
+            ->paginate($perPage, ['*'], 'staff_page')->withQueryString();
+
+        // Full list for the Supervisor dropdowns in the add/edit modals
+        $supervisors = User::where('role', 'supervisor')->orderBy('name')->get();
+
+        return view('staff_performance.users', compact('supervisorUsers', 'staffUsers', 'supervisors'));
     }
-
-    $supervisorUsers = $query()->where('role', 'supervisor')
-        ->paginate($perPage, ['*'], 'sup_page')->withQueryString();
-
-    $staffUsers = $query()->where('role', '!=', 'supervisor')
-        ->paginate($perPage, ['*'], 'staff_page')->withQueryString();
-
-    // Full list for the Supervisor dropdowns in the add/edit modals
-    $supervisors = User::where('role', 'supervisor')->orderBy('name')->get();
-
-    return view('staff_performance.users', compact('supervisorUsers', 'staffUsers', 'supervisors'));
-}
 
     public function storeUser(Request $request)
     {

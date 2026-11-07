@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendKingsChatMessage;
 use App\Models\Appraisal;
 use App\Models\AppraisalCycle;
 use App\Models\AppraisalKra;
@@ -19,6 +20,17 @@ class AppraisalController extends Controller
     private function activeCycle()
     {
         return AppraisalCycle::where('is_active', true)->firstOrFail();
+    }
+
+    /**
+     * Queue a KingsChat message for a user. Sends after the page response, so a slow or
+     * failing KingsChat call can never delay or break the request. Safe to call with null.
+     */
+    private function kcNotify(?int $userId, string $text): void
+    {
+        if ($userId) {
+            SendKingsChatMessage::dispatchAfterResponse($userId, $text);
+        }
     }
 
     /** Staff: view own appraisal for the current active cycle (creates a draft if none exists yet) */
@@ -171,7 +183,25 @@ class AppraisalController extends Controller
     public function staffSubmit(Request $request, Appraisal $appraisal)
     {
         $this->authorizeStaff($appraisal);
+
+        // Only notify on the first submission, not when staff re-submit edits before grading starts
+        $firstSubmission = $appraisal->status !== 'submitted';
+
         $appraisal->update(['status'=>'submitted','submitted_at'=>now()]);
+
+        if ($firstSubmission) {
+            $appraisal->loadMissing(['staff', 'cycle']);
+            $staffName = $appraisal->staff->name ?? 'A staff member';
+            $cycleName = $appraisal->cycle->name ?? 'the current cycle';
+
+            // KingsChat: tell the supervisor there is an appraisal to review
+            $this->kcNotify(
+                $appraisal->supervisor_id,
+                "iPerform: {$staffName} has submitted their {$cycleName} appraisal for your review.\n"
+                . route('supervisor.appraisal.show', $appraisal)
+            );
+        }
+
         return redirect()->route('staff.dashboard')->with('success', 'Appraisal submitted to your supervisor!');
     }
 
@@ -279,8 +309,35 @@ class AppraisalController extends Controller
     public function supervisorForward(Request $request, Appraisal $appraisal)
     {
         $this->authorizeSupervisor($appraisal);
+
+        // Only notify the first time it is forwarded, not on repeat clicks
+        $firstForward = $appraisal->status !== 'with_staff_performance';
+
         $this->supervisorSave($request, $appraisal);
         $appraisal->update(['status'=>'with_staff_performance','supervisor_confirmed'=>true,'forwarded_at'=>now()]);
+
+        if ($firstForward) {
+            $appraisal->loadMissing(['staff', 'cycle']);
+            $staffName = $appraisal->staff->name ?? 'A staff member';
+            $cycleName = $appraisal->cycle->name ?? 'the current cycle';
+
+            // KingsChat: tell the staff their supervisor has graded them
+            $this->kcNotify(
+                $appraisal->staff_id,
+                "iPerform: Your supervisor has graded your {$cycleName} appraisal and sent it to Staff Performance for final review.\n"
+                . route('staff.appraisal.view', $appraisal)
+            );
+
+            // KingsChat: tell every Staff Performance user it is ready for their review
+            foreach (User::where('role', 'staff_performance')->pluck('id') as $hrId) {
+                $this->kcNotify(
+                    $hrId,
+                    "iPerform: {$staffName}'s {$cycleName} appraisal has been graded by the supervisor and is ready for Staff Performance review.\n"
+                    . route('hr.appraisal.show', $appraisal)
+                );
+            }
+        }
+
         return redirect()->route('supervisor.dashboard')->with('success', 'Appraisal forwarded to Staff Performance!');
     }
 
@@ -414,6 +471,10 @@ class AppraisalController extends Controller
     public function hrApprove(Request $request, Appraisal $appraisal)
     {
         abort_unless(Auth::user()->isStaffPerformance(), 403);
+
+        // Only notify the first time it is approved, not when HR re-saves an approved appraisal
+        $firstApproval = $appraisal->status !== 'approved';
+
         $this->saveSection7($request, $appraisal);
         $appraisal->update([
             'staff_performance_s1_weighted' => $request->input('staff_performance_s1_weighted'),
@@ -426,6 +487,27 @@ class AppraisalController extends Controller
             'status' => 'approved',
             'approved_at' => now(),
         ]);
+
+        if ($firstApproval) {
+            $appraisal->loadMissing(['staff', 'cycle']);
+            $staffName = $appraisal->staff->name ?? 'your staff member';
+            $cycleName = $appraisal->cycle->name ?? 'the current cycle';
+
+            // KingsChat: tell the staff their appraisal has been graded by Staff Performance
+            $this->kcNotify(
+                $appraisal->staff_id,
+                "iPerform: Staff Performance has graded your {$cycleName} appraisal.\n"
+                . route('staff.appraisal.view', $appraisal)
+            );
+
+            // KingsChat: tell the supervisor too
+            $this->kcNotify(
+                $appraisal->supervisor_id,
+                "iPerform: Staff Performance has graded {$staffName}'s {$cycleName} appraisal.\n"
+                . route('supervisor.appraisal.show', $appraisal)
+            );
+        }
+
         return redirect()->route('hr.dashboard')->with('success', 'Appraisal approved!');
     }
 

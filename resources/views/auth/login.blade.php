@@ -3,10 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>iPerform — Sign In</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>tailwind.config={theme:{extend:{colors:{primary:'#3C3489'}}}}</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/kingschat-web-sdk/dist/stylesheets/style.min.css">
 </head>
 <body class="bg-[#f5f0ff] min-h-screen flex items-center justify-center p-4">
 <div class="bg-white rounded-2xl p-10 w-full max-w-sm shadow-sm">
@@ -46,6 +48,19 @@
       Sign in
     </button>
   </form>
+
+  <div class="flex items-center gap-3 my-5">
+    <div class="flex-1 h-px bg-[#e0daf5]"></div>
+    <span class="text-[11px] text-gray-400 uppercase tracking-wider">or</span>
+    <div class="flex-1 h-px bg-[#e0daf5]"></div>
+  </div>
+
+  <button type="button" id="kcLogin"
+    class="w-full flex items-center justify-center gap-2 border border-[#3C3489] text-[#3C3489] py-2.5 rounded-lg font-medium text-sm hover:bg-[#eeedfe] transition disabled:opacity-60">
+    <img src="/images/kc.png" alt="KingsChat logo" style="width:22px; height:22px;">
+    <span id="kcLabel">Continue with KingsChat</span>
+  </button>
+  <div id="kcError" class="text-red-600 text-sm mt-3 hidden"></div>
 </div>
 
 <script>
@@ -63,6 +78,50 @@
       input.focus();
     });
   })();
+</script>
+
+<script type="module">
+  import kingsChatWebSdk from 'https://cdn.jsdelivr.net/npm/kingschat-web-sdk/+esm';
+
+  // Some bundles expose the SDK as the default export, others one level deeper
+  const sdk = kingsChatWebSdk.login ? kingsChatWebSdk : kingsChatWebSdk.default;
+
+  const btn   = document.getElementById('kcLogin');
+  const label = document.getElementById('kcLabel');
+  const err   = document.getElementById('kcError');
+  const showError = m => { err.textContent = m; err.classList.remove('hidden'); };
+
+  btn.addEventListener('click', async function () {
+    err.classList.add('hidden');
+    btn.disabled = true;
+    label.textContent = 'Connecting…';
+
+    try {
+      const tokens = await sdk.login({
+        clientId: "{{ config('services.kingschat.client_id') }}",
+        scopes: ['send_chat_message']   // replace with the scope KingsChat says reads the user's profile
+      });
+
+      const res = await fetch("{{ route('login.kingschat') }}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content
+        },
+        body: JSON.stringify({ access_token: tokens.accessToken })
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message || 'KingsChat sign-in failed.');
+      window.location = data.redirect;
+    } catch (e) {
+      console.error(e);
+      showError(e.message || 'KingsChat sign-in was cancelled.');
+      btn.disabled = false;
+      label.textContent = 'Continue with KingsChat';
+    }
+  });
 </script>
 </body>
 </html>

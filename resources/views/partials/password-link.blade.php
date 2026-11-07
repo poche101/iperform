@@ -2,3 +2,9 @@
   class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('password.change') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
   <i class="ti ti-lock text-lg w-5"></i> Password
 </a>
+@if(auth()->user()->isStaffPerformance())
+<a href="{{ route('hr.kingschat') }}"
+  class="flex items-center gap-2.5 px-5 py-2.5 text-sm border-l-[3px] {{ request()->routeIs('hr.kingschat') ? 'bg-[#eeedfe] text-[#3C3489] border-[#3C3489] font-medium' : 'text-gray-500 border-transparent hover:bg-[#f5f0ff] hover:text-[#3C3489]' }}">
+  <img src="{{ asset('images/kc.png') }}" alt="" class="w-5 h-5 object-contain flex-shrink-0"> KingsChat
+</a>
+@endif

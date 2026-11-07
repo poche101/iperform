@@ -24,6 +24,10 @@
   $newWeekStart = old('week_start', now()->startOfWeek()->format('Y-m-d'));
   $newWeekEnd   = old('week_end', now()->endOfWeek()->format('Y-m-d'));
   $newIsWeekly  = $newLogType === 'weekly';
+
+  // Category is picked first; its name becomes the label of the Title field
+  $categories   = ['KRA', 'Routine', 'Ideas, Innovation & Outstanding Contribution'];
+  $newCategory  = old('category', 'Routine');
 @endphp
 
 <style>
@@ -59,6 +63,24 @@
   <form method="POST" action="{{ route('staff.tasks.store') }}">
     @csrf
 
+    {{-- Category first: choosing it renames the Title label below --}}
+    <div class="mb-4">
+      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+        Category <span class="text-gray-400 font-normal normal-case">(choose this first)</span>
+      </label>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        @foreach($categories as $cat)
+        <label class="block w-full">
+          <input type="radio" name="category" value="{{ $cat }}" {{ $newCategory === $cat ? 'checked' : '' }}
+            onchange="setCategoryTitle(this.value)" class="sr-only peer">
+          <div class="text-center py-2 px-2.5 border border-[#e0daf5] rounded-lg text-xs sm:text-sm cursor-pointer peer-checked:bg-[#3C3489] peer-checked:text-white peer-checked:border-[#3C3489] hover:bg-[#eeedfe] transition truncate">
+            {{ $cat }}
+          </div>
+        </label>
+        @endforeach
+      </div>
+    </div>
+
     {{-- Daily / Weekly --}}
     <div class="mb-4">
       <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Log type</label>
@@ -76,7 +98,7 @@
     </div>
 
     <div class="mb-3">
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Title</label>
+      <label id="title-label-new" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{{ $newCategory }}</label>
       <input name="title" value="{{ old('title') }}" class="w-full px-3 py-2.5 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD]" placeholder="e.g. Outreach with my team" required>
     </div>
 
@@ -139,20 +161,6 @@
           </label>
           <textarea name="challenge_impact" rows="2" class="w-full px-3 py-2 border border-[#e0daf5] rounded-lg text-sm focus:outline-none focus:border-[#7F77DD] resize-none bg-white" placeholder="How did this affect outcomes or timelines? (Leave blank if none)">{{ old('challenge_impact') }}</textarea>
         </div>
-      </div>
-    </div>
-
-    <div class="mb-4">
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Category</label>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        @foreach(['KRA','Routine','Ideas, Innovation & Outstanding Contribution'] as $cat)
-        <label class="block w-full">
-          <input type="radio" name="category" value="{{ $cat }}" {{ old('category','Routine')===$cat?'checked':'' }} class="sr-only peer">
-          <div class="text-center py-2 px-2.5 border border-[#e0daf5] rounded-lg text-xs sm:text-sm cursor-pointer peer-checked:bg-[#3C3489] peer-checked:text-white peer-checked:border-[#3C3489] hover:bg-[#eeedfe] transition truncate">
-            {{ $cat }}
-          </div>
-        </label>
-        @endforeach
       </div>
     </div>
 
@@ -482,6 +490,13 @@
 @endforelse
 
 <script>
+// Category picked in the new-task form -> the Title label shows that category
+// (KRA / Routine / Ideas, Innovation & Outstanding Contribution)
+function setCategoryTitle(category) {
+  const label = document.getElementById('title-label-new');
+  if (label) label.textContent = category;
+}
+
 function toggleEditTask(id) {
   const display = document.getElementById('display-' + id);
   const form = document.getElementById('edit-form-' + id);

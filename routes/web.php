@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\ChangePasswordController;
 use App\Http\Controllers\AppraisalCommentController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\HrNotificationController;
+use App\Http\Controllers\KingsChatSenderController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +23,10 @@ Route::get('/offline', fn() => view('offline'))->name('offline');
 // Auth
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
+// KingsChat sign-in: only for accounts whose username is the user's KingsChat handle
+Route::post('/login/kingschat', [AuthController::class, 'kingsChatLogin'])
+    ->middleware(['guest', 'throttle:10,1'])
+    ->name('login.kingschat');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Forgot / reset password (guests, via emailed link)
@@ -111,6 +116,10 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::post('/cycles', [StaffPerformanceController::class, 'storeCycle'])->name('cycles.store');
     Route::patch('/cycles/{cycle}/extend', [StaffPerformanceController::class, 'extendCycle'])->name('cycles.extend');
     Route::delete('/cycles/{cycle}', [StaffPerformanceController::class, 'destroyCycle'])->name('cycles.destroy');
+
+    // KingsChat notification sender: HR connects the KingsChat account that messages are sent from
+    Route::get('/kingschat', [KingsChatSenderController::class, 'show'])->name('kingschat');
+    Route::post('/kingschat', [KingsChatSenderController::class, 'store'])->name('kingschat.store');
 
     // HR bell: live feed of submitted appraisals (full name: hr.notifications.appraisals)
     Route::get('/notifications/appraisals', [HrNotificationController::class, 'appraisals'])
