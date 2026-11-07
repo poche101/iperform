@@ -27,6 +27,16 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
 Route::post('/login/kingschat', [AuthController::class, 'kingsChatLogin'])
     ->middleware(['guest', 'throttle:10,1'])
     ->name('login.kingschat');
+
+// KingsChat OAuth popup landing page. KingsChat redirects the popup here after sign-in.
+// Must stay public (no auth/guest middleware): the user is not logged in yet at this point.
+Route::get('/auth/kingschat/callback', function () {
+    return response(
+        '<!doctype html><meta charset="utf-8"><title>KingsChat</title>'
+        . '<p style="font-family:sans-serif;text-align:center;margin-top:20vh">Signing in…</p>'
+    );
+})->name('kingschat.callback');
+
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Forgot / reset password (guests, via emailed link)
