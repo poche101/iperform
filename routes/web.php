@@ -12,6 +12,7 @@ use App\Http\Controllers\AppraisalCommentController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\HrNotificationController;
 use App\Http\Controllers\KingsChatSenderController;
+use App\Http\Controllers\KingsChatAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -23,44 +24,18 @@ Route::get('/offline', fn() => view('offline'))->name('offline');
 // Auth
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
-// KingsChat sign-in: only for accounts whose username is the user's KingsChat handle
-Route::post('/login/kingschat', [AuthController::class, 'kingsChatLogin'])
+// KingsChat sign-in (Developer API). Only for accounts whose username is the user's KingsChat handle.
+// 1) the button sends the browser to KingsChat's login page
+Route::get('/login/kingschat', [KingsChatAuthController::class, 'start'])
     ->middleware(['guest', 'throttle:10,1'])
     ->name('login.kingschat');
-
-// KingsChat OAuth landing page. KingsChat redirects here after sign-in.
-// Must stay public (no auth/guest middleware): the user is not logged in yet at this point.
-// DIAGNOSTIC VERSION: shows only the NAMES of the values received (never their contents).
-Route::get('/auth/kingschat/callback', function () {
-    return response(<<<'HTML'
-<!doctype html><meta charset="utf-8"><title>KingsChat</title>
-<p id="m" style="font-family:sans-serif;text-align:center;margin-top:20vh">Signing in…</p>
-<script>
-const p = new URLSearchParams(location.hash.slice(1) + "&" + location.search.slice(1));
-const names = [...p.keys()].filter(Boolean).join(", ") || "nothing";
-document.getElementById("m").textContent =
-  "Received: " + names + " | opener: " + (window.opener ? "yes" : "no");
-</script>
-HTML);
-})->name('kingschat.callback');
-
-// KingsChat posts the authorization code here (redirect URL registered in the KingsChat portal, Form POST).
-// Public and CSRF-exempt because the request comes from KingsChat, not from our own pages.
-// The CSRF middleware has had different class names across Laravel versions, so all of them are listed.
-// TEMPORARY diagnostic: logs the field NAMES and the origin label. The code itself is never logged.
-Route::post('/login/kingschat/callback', function (Request $request) {
-    \Log::info('KC callback fields: ' . implode(', ', array_keys($request->all())) . ' | origin=' . $request->input('origin'));
-    return redirect()->route('login');
-})
-    ->withoutMiddleware([
-        'Illuminate\Foundation\Http\Middleware\ValidateCsrfToken',
-        'Illuminate\Foundation\Http\Middleware\PreventRequestForgery',
-        'Illuminate\Foundation\Http\Middleware\VerifyCsrfToken',
-        'App\Http\Middleware\VerifyCsrfToken',
-    ])
-    ->middleware('throttle:30,1')
-    ->name('kingschat.callback.post');
-
+// 2) KingsChat form-POSTs the login code to the redirect URL registered on the app: the site root.
+//    It is a cross-site POST, so it carries no CSRF token; it is protected by the one-time `origin`
+//    state and by exchanging the code with KingsChat server-side.
+Route::post('/', [KingsChatAuthController::class, 'callback'])
+    ->middleware('throttle:20,1')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])
+    ->name('kingschat.callback');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Forgot / reset password (guests, via emailed link)
