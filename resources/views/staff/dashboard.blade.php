@@ -68,10 +68,14 @@
         @php
             $diffDays = (int) floor(now()->diffInDays(\Carbon\Carbon::parse($cycle->deadline), false));
         @endphp
-        {{ $diffDays > 0 ? $diffDays . 'd' : ($diffDays == 0 ? 'Today' : 'Locked') }}
+        @if (auth()->user()->isSupervisor())
+            Open
+        @else
+            {{ $diffDays > 0 ? $diffDays . 'd' : ($diffDays == 0 ? 'Today' : 'Locked') }}
+        @endif
     @endif
 </div>
-<div class="text-xs text-gray-400 mt-0.5">Until Due Date</div>
+<div class="text-xs text-gray-400 mt-0.5">{{ auth()->user()->isSupervisor() ? 'No deadline for supervisors' : 'Until Due Date' }}</div>
   </div>
   <div class="bg-white border border-[#e0daf5] rounded-xl p-4">
     <div class="w-9 h-9 bg-[#eeedfe] rounded-lg flex items-center justify-center mb-2">

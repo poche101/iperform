@@ -10,11 +10,23 @@ class AppraisalCycle extends Model
 
     public static function active() { return static::where('is_active', true)->first(); }
 
-    /** Staff can log and edit until the end of the deadline day. Supervisors and HR are never gated by this. */
-public function isOpenForStaff(): bool
-{
-    return now()->lte($this->deadline->copy()->endOfDay());
-}
+    /** Staff can log and edit until the end of the deadline day. */
+    public function isOpenForStaff(): bool
+    {
+        return now()->lte($this->deadline->copy()->endOfDay());
+    }
+
+    /**
+     * Is this cycle open for the given user to submit / edit their own appraisal and tasks?
+     * Supervisors are never locked out by the deadline; everyone else follows isOpenForStaff().
+     */
+    public function isOpenFor(?User $user): bool
+    {
+        if ($user && $user->isSupervisor()) {
+            return true;
+        }
+        return $this->isOpenForStaff();
+    }
 
     public function appraisals()
     {

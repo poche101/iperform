@@ -262,7 +262,7 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
             @include('partials.role-switch')
         </nav>
         <div class="p-4 border-t border-[#e0daf5] bg-gray-50/50">
-            @if(isset($cycle) && $cycle)
+            @if(isset($cycle) && $cycle && !auth()->user()->isSupervisor())
            @php
     $deadline = \Carbon\Carbon::parse($cycle->deadline);
     $now = now();
@@ -325,7 +325,7 @@ body { font-family: system-ui, -apple-system, sans-serif; padding-top: env(safe-
             @include('partials.role-switch')
         </nav>
         <div class="p-4 border-t border-[#e0daf5] bg-gray-50/50 pb-safe">
-            @if(isset($cycle) && $cycle)
+            @if(isset($cycle) && $cycle && !auth()->user()->isSupervisor())
             <div class="bg-[#faeeda] border border-amber-100 rounded-xl p-3 mb-3">
     <div class="text-[10px] text-amber-700 font-medium uppercase tracking-wider flex items-center gap-1 mb-0.5">
         <i class="ti ti-clock text-xs"></i> Deadline

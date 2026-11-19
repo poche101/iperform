@@ -45,7 +45,7 @@ class AppraisalController extends Controller
 
         if (!$appraisal) {
             // Don't create an empty draft nobody can fill in once the deadline has passed
-            if (!$cycle->isOpenForStaff()) {
+            if (!$cycle->isOpenFor($user)) {
                 return redirect()->route('staff.dashboard')
                     ->with('error', "The deadline for {$cycle->name} has passed. Contact HR for an extension.");
             }
@@ -548,15 +548,14 @@ class AppraisalController extends Controller
      * Can the staff member still edit this appraisal?
      * Requires BOTH:
      *  - status: 'drafting', or 'submitted' before the supervisor has started grading
-     *  - the cycle's deadline (end of that day) has not passed
-     * Supervisors and HR are never gated by this.
+     *  - the cycle's deadline (end of that day) has not passed (supervisors are exempt from this)
      */
     private function isEditableByStaff(Appraisal $appraisal): bool
     {
         $statusOk = $appraisal->status === 'drafting'
             || ($appraisal->status === 'submitted' && is_null($appraisal->grading_started_at));
 
-        return $statusOk && $appraisal->cycle && $appraisal->cycle->isOpenForStaff();
+        return $statusOk && $appraisal->cycle && $appraisal->cycle->isOpenFor(Auth::user());
     }
 
     private function authorizeStaff(Appraisal $appraisal)

@@ -34,11 +34,11 @@ class TaskLogController extends Controller
         return [$cycle, $cycles];
     }
 
-    /** Staff only: has this task's cycle passed its deadline? Supervisors and HR are never gated by this. */
+    /** Has this task's cycle passed its deadline for the current user? Supervisors are never locked by the deadline. */
     private function staffCycleClosed(TaskLog $taskLog): bool
     {
         $cycle = AppraisalCycle::find($taskLog->cycle_id);
-        return $cycle && !$cycle->isOpenForStaff();
+        return $cycle && !$cycle->isOpenFor(Auth::user());
     }
 
     /** Reads ?type=daily|weekly from the request; anything else means "show all". */
@@ -150,7 +150,7 @@ class TaskLogController extends Controller
 
         $cycle = AppraisalCycle::where('is_active', true)->firstOrFail();
 
-        if (!$cycle->isOpenForStaff()) {
+        if (!$cycle->isOpenFor(Auth::user())) {
             return back()->with('error', "The deadline for {$cycle->name} has passed, so task logging is closed. Contact HR for an extension.");
         }
 
