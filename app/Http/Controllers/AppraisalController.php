@@ -396,7 +396,7 @@ class AppraisalController extends Controller
      */
     private function saveSection7(Request $request, Appraisal $appraisal): void
     {
-        if (!$request->has('section7') && !$request->has('section7_misconduct') && !$request->has('total_score_comment')) {
+        if (!$request->has('section7') && !$request->has('section7_misconduct') && !$request->has('total_score_comment') && !$request->has('queries_count')) {
             return;
         }
 
@@ -407,6 +407,7 @@ class AppraisalController extends Controller
             'section7_misconduct.score'     => 'nullable|numeric|min:0|max:10',
             'section7_misconduct.comment'   => 'nullable|string|max:1000',
             'total_score_comment'           => 'nullable|string|max:1000',
+            'queries_count'                 => 'nullable|integer|min:0|max:50',
         ]);
 
         $keys  = ['attendance', 'chapel', 'punctuality', 'reports', 'participation'];
@@ -428,12 +429,18 @@ class AppraisalController extends Controller
         $appraisal->save();
 
         $extras = [];
-        if ($request->has('section7_misconduct')) {
-            $score = $request->input('section7_misconduct.score');
-            $extras['section7_misconduct'] = [
-                'score'   => ($score === null || $score === '') ? 0 : (float) $score,
-                'comment' => (string) $request->input('section7_misconduct.comment', ''),
-            ];
+        if ($request->has('section7_misconduct') || $request->has('queries_count')) {
+            // Start from what is stored so the query count is never lost when only the score/comment is saved
+            $misc = is_array($appraisal->section7_misconduct) ? $appraisal->section7_misconduct : [];
+            if ($request->has('section7_misconduct')) {
+                $score = $request->input('section7_misconduct.score');
+                $misc['score']   = ($score === null || $score === '') ? 0 : (float) $score;
+                $misc['comment'] = (string) $request->input('section7_misconduct.comment', '');
+            }
+            if ($request->has('queries_count')) {
+                $misc['queries'] = max(0, (int) $request->input('queries_count', 0));
+            }
+            $extras['section7_misconduct'] = $misc + ['score' => 0, 'comment' => ''];
         }
         if ($request->has('total_score_comment')) {
             $extras['total_score_comment'] = $request->input('total_score_comment');
@@ -464,6 +471,8 @@ class AppraisalController extends Controller
             's4' => $appraisal->staff_performance_s4_weighted,
             'overall' => $appraisal->staff_performance_overall,
             'grade' => $appraisal->staff_performance_grade,
+            'queries' => $appraisal->queryCount(),
+            'deduction' => $appraisal->queryDeduction(),
         ]);
     }
 

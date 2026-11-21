@@ -342,7 +342,7 @@ td { padding: 5px 8px; border: 0.5px solid #e0daf5; vertical-align: top; }
         S2 = (Avg / 10) × 25 &nbsp;·&nbsp;
         S3 = (Avg / 10) × 20 &nbsp;·&nbsp;
         S4 = (Sec7 Total / 60) × 20 &nbsp;·&nbsp;
-        Overall = S1 + S2 + S3 + S4
+        Overall = S1 + S2 + S3 + S4 − (Queries × {{ \App\Models\Appraisal::QUERY_PENALTY }})
       </div>
       <table style="margin-bottom:10px;">
         <tr>
@@ -360,6 +360,10 @@ td { padding: 5px 8px; border: 0.5px solid #e0daf5; vertical-align: top; }
         <tr>
           <td style="color:#888780">Section 4 — Compliance to Administrative Policy (20 marks)</td>
           <td style="font-weight:bold; color:#3C3489; text-align:right">{{ $appraisal->staff_performance_s4_weighted ?? '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color:#b91c1c">Queries this cycle ({{ $appraisal->queryCount() }}) — deduction</td>
+          <td style="font-weight:bold; color:#b91c1c; text-align:right">{{ $appraisal->queryCount() ? '−' . $appraisal->queryDeduction() : '0' }}</td>
         </tr>
         <tr style="border-top:2px solid #3C3489;">
           <td style="font-weight:bold; font-size:12px; padding-top:6px">Overall Performance Score</td>

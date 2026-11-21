@@ -6,6 +6,25 @@ use Illuminate\Database\Eloquent\Model;
 
 class Appraisal extends Model
 {
+    /** Marks taken off the overall performance score for every query issued to the staff. */
+    public const QUERY_PENALTY = 2;
+
+    /** Number of queries recorded by Staff Performance (kept inside the section7_misconduct JSON). */
+    public function queryCount(): int
+    {
+        $misc = $this->section7_misconduct;
+        if (is_string($misc)) {
+            $misc = json_decode($misc, true);
+        }
+        return is_array($misc) ? max(0, (int) ($misc['queries'] ?? 0)) : 0;
+    }
+
+    /** Total marks deducted from the overall score because of queries. */
+    public function queryDeduction(): float
+    {
+        return (float) ($this->queryCount() * self::QUERY_PENALTY);
+    }
+
     protected $fillable = [
         'cycle_id','staff_id','supervisor_id','status',
         'section5','section6','section7_items',
@@ -123,7 +142,8 @@ class Appraisal extends Model
         }
         $s7total += (float) (is_array($misc) ? ($misc['score'] ?? 0) : 0);
         $s4      = round(($s7total / 60) * 20, 2);
-        $overall = round(($s1 ?? 0) + ($s2 ?? 0) + ($s3 ?? 0) + $s4, 2);
+        // Queries issued to the staff are deducted from the total (never below 0)
+        $overall = round(max(0, ($s1 ?? 0) + ($s2 ?? 0) + ($s3 ?? 0) + $s4 - $this->queryDeduction()), 2);
         $grade   = $this->getGrade($overall);
 
         $this->update([

@@ -35,6 +35,16 @@
       @endforeach
     </div>
 
+    @php $queryCount = $appraisal->queryCount(); @endphp
+    <div class="flex items-center justify-between gap-3 flex-wrap rounded-lg px-4 py-2.5 mb-4 text-sm {{ $queryCount ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-green-50 border border-green-200 text-green-700' }}">
+      <span class="font-medium">Queries this cycle ({{ $appraisal->cycle->name ?? '' }})</span>
+      @if($queryCount)
+        <span class="font-semibold">{{ $queryCount }} {{ \Illuminate\Support\Str::plural('query', $queryCount) }} · −{{ $appraisal->queryDeduction() }} marks from the overall score</span>
+      @else
+        <span class="font-semibold">None</span>
+      @endif
+    </div>
+
     @if($appraisal->staff_performance_comments)
     <div>
       <div class="text-xs text-gray-400 mb-1">Staff Performance comments</div>

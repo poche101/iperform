@@ -297,7 +297,25 @@
   </div>
   <div class="p-5">
     <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-xs text-amber-700 mb-4">
-      <strong>Formula:</strong> S1=(avg sup score/10)×35 · S2=(avg/10)×25 · S3=(avg/10)×20 · S4=(Sec7total/60)×20 · Overall=S1+S2+S3+S4
+      <strong>Formula:</strong> S1=(avg sup score/10)×35 · S2=(avg/10)×25 · S3=(avg/10)×20 · S4=(Sec7total/60)×20 · Overall=S1+S2+S3+S4 − (queries × {{ \App\Models\Appraisal::QUERY_PENALTY }})
+    </div>
+    @php
+      $queryCount = $appraisal->queryCount();
+      $queryPenalty = \App\Models\Appraisal::QUERY_PENALTY;
+    @endphp
+    <div class="flex flex-wrap items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
+      <div>
+        <div class="text-sm font-medium text-red-700">Queries issued to this staff</div>
+        <div class="text-xs text-red-500">Each query deducts {{ $queryPenalty }} marks from the overall score.</div>
+      </div>
+      <div class="flex items-center gap-3">
+        @if($canEdit)
+        <input type="number" min="0" max="50" step="1" name="queries_count" id="queries_count" value="{{ $queryCount }}" class="w-20 text-center border border-red-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-red-400">
+        @else
+        <span class="font-semibold text-red-700">{{ $queryCount }}</span>
+        @endif
+        <div class="text-sm text-red-700 font-semibold">− <span id="query-deduction">{{ $queryCount * $queryPenalty }}</span> marks</div>
+      </div>
     </div>
     <div class="mb-4">
       <button type="button" id="auto-calc-btn" onclick="autoCalculate()" class="inline-flex items-center gap-2 bg-[#534AB7] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#3C3489] transition">
@@ -377,6 +395,8 @@ async function autoCalculate() {
     const el = document.getElementById(['staff_performance_s1_weighted','staff_performance_s2_weighted','staff_performance_s3_weighted','staff_performance_s4_weighted'][i]);
     if(el) el.value = d[k] ?? '';
   });
+  const qd = document.getElementById('query-deduction');
+  if (qd && d.deduction !== undefined) qd.textContent = d.deduction;
   document.getElementById('overall-display').textContent = d.overall ?? '—';
   document.getElementById('staff_performance_overall').value = d.overall ?? '';
   document.getElementById('grade-display').textContent = d.grade ?? '—';
@@ -398,6 +418,13 @@ async function autoCalculate() {
     if (grand) grand.textContent = sum + summary;
   }
   inputs.forEach(i => i.addEventListener('input', update));
+})();
+
+// Live query deduction label
+(function () {
+  const q = document.getElementById('queries_count');
+  const out = document.getElementById('query-deduction');
+  if (q && out) q.addEventListener('input', () => { out.textContent = Math.max(0, parseInt(q.value, 10) || 0) * {{ \App\Models\Appraisal::QUERY_PENALTY }}; });
 })();
 
 async function aiComment() {
